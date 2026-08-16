@@ -1,0 +1,32 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"main": ".open-next/worker.js",
+	"name": "cfs-tutor-app",
+	"compatibility_date": "2026-08-16",
+	"compatibility_flags": [
+		"global_fetch_strictly_public"
+	],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"services": [
+		{
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "cfs-tutor-app"
+		}
+	],
+	"images": {
+		"binding": "IMAGES"
+	},
+	"observability": {
+		"enabled": true
+	},
+	"d1_databases": [
+		{
+			"binding": "cfs_tutor_db",
+			"database_name": "cfs-tutor-db",
+			"database_id": "2c5c533b-9c86-43b2-930d-55a097031a97"
+		}
+	]
+}

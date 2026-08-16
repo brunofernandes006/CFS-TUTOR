@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CFS Tutor - Banco de Questões",
+  "description": "Schema de validação para importação de questões no CFS Tutor",
+  "type": "object",
+  "required": ["version", "questions"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Versão do schema"
+    },
+    "questions": {
+      "type": "array",
+      "description": "Lista de questões para importação",
+      "items": {
+        "type": "object",
+        "required": ["question_uid", "origin", "discipline", "syllabus_uid", "statement", "options", "correct_option"],
+        "properties": {
+          "question_uid": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Identificador único da questão"
+          },
+          "origin": {
+            "type": "string",
+            "enum": ["OFICIAL", "INEDITA", "DIDATICA"],
+            "description": "Origem da questão"
+          },
+          "discipline": {
+            "type": "string",
+            "enum": ["Língua Portuguesa", "Matemática e Raciocínio Lógico", "Conhecimentos Profissionais"],
+            "description": "Disciplina da questão"
+          },
+          "syllabus_uid": {
+            "type": "string",
+            "minLength": 1,
+            "description": "UID do item do syllabus vinculado"
+          },
+          "theme": {
+            "type": "string",
+            "description": "Tema da questão"
+          },
+          "subtheme": {
+            "type": "string",
+            "description": "Subtema da questão"
+          },
+          "difficulty": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Nível de dificuldade (1-5)"
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 10,
+            "description": "Enunciado da questão"
+          },
+          "options": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 5,
+            "description": "Alternativas da questão",
+            "items": {
+              "type": "object",
+              "required": ["option_text"],
+              "properties": {
+                "option_text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Texto da alternativa"
+                }
+              }
+            }
+          },
+          "correct_option": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4,
+            "description": "Índice da alternativa correta (0-based)"
+          },
+          "explanation": {
+            "type": "string",
+            "description": "Explicação da resposta correta"
+          },
+          "year": {
+            "type": "integer",
+            "description": "Ano da prova (obrigatório para OFICIAL)"
+          },
+          "exam": {
+            "type": "string",
+            "description": "Nome do exame (obrigatório para OFICIAL)"
+          },
+          "number": {
+            "type": "integer",
+            "description": "Número da questão na prova (obrigatório para OFICIAL)"
+          },
+          "source": {
+            "type": "string",
+            "description": "Fonte/referência (obrigatório para OFICIAL)"
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "Se a questão foi verificada (obrigatório true para OFICIAL)"
+          }
+        }
+      }
+    }
+  }
+}

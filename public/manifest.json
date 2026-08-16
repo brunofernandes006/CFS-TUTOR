@@ -1,0 +1,29 @@
+{
+  "name": "CFS Tutor — Missão Aprovação",
+  "short_name": "CFS Tutor",
+  "description": "Ambiente gamificado de estudo para o CFS PMESP. Ferramenta independente.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#071a2b",
+  "theme_color": "#071a2b",
+  "orientation": "any",
+  "categories": ["education"],
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

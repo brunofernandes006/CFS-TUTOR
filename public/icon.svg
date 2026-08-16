@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d2540"/>
+      <stop offset="100%" stop-color="#071a2b"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e8c96a"/>
+      <stop offset="100%" stop-color="#c9a84c"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="80" fill="url(#bg)"/>
+  <path d="M256 60 L420 160 L420 320 C420 400 340 460 256 480 C172 460 92 400 92 320 L92 160 Z" fill="none" stroke="url(#gold)" stroke-width="18"/>
+  <path d="M256 100 L380 180 L380 310 C380 375 315 425 256 442 C197 425 132 375 132 310 L132 180 Z" fill="#0d2540" opacity="0.5"/>
+  <text x="256" y="265" font-family="Arial,Helvetica,sans-serif" font-weight="900" font-size="130" fill="url(#gold)" text-anchor="middle" dominant-baseline="central">CFS</text>
+  <text x="256" y="380" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="56" fill="#e8edf2" text-anchor="middle" opacity="0.8">TUTOR</text>
+  <circle cx="256" cy="155" r="18" fill="url(#gold)"/>
+  <line x1="256" y1="137" x2="256" y2="120" stroke="#c9a84c" stroke-width="5" stroke-linecap="round"/>
+  <line x1="243" y1="142" x2="232" y2="130" stroke="#c9a84c" stroke-width="5" stroke-linecap="round"/>
+  <line x1="269" y1="142" x2="280" y2="130" stroke="#c9a84c" stroke-width="5" stroke-linecap="round"/>
+</svg>

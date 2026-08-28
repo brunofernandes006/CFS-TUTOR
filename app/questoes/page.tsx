@@ -11,6 +11,8 @@ type Question = {
   origin: "REAL" | "INEDITA" | "DIDATICA";
   label: "[QUESTÃO REAL]" | "[QUESTÃO INÉDITA]" | "[EXEMPLO DIDÁTICO]";
   questionNumber: number | null;
+  contextText: string | null;
+  requiresSourceVisual: boolean;
   statement: string;
   options: string[];
   difficulty: number | null;
@@ -160,6 +162,14 @@ function QuestionsContent() {
               <span className="rounded-full bg-navy-800 px-3 py-1 text-text-secondary">{question.discipline}</span>
               {question.questionNumber && <span className="rounded-full bg-navy-800 px-3 py-1 text-text-secondary">Questão {question.questionNumber}</span>}
             </div>
+
+            {question.contextText && (
+              <div className="mt-5 rounded-2xl border border-graphite/40 bg-navy-950/70 p-4 sm:p-5">
+                <p className="mb-2 text-[11px] font-black uppercase tracking-[0.14em] text-text-muted">Texto-base da prova</p>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">{question.contextText}</p>
+              </div>
+            )}
+
             <p className="mt-5 whitespace-pre-wrap text-base font-semibold leading-relaxed text-text-primary">{question.statement}</p>
 
             <div className="mt-5 space-y-2">

@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       supabaseSelect<QuestionRow[]>("questions", new URLSearchParams({
         select: "id,discipline_id,syllabus_item_id,exam_id,origin,question_number,statement,options,context_text,requires_source_visual,difficulty,source_page,validation_status",
         order: "created_at.desc",
-        limit: "1000",
+        limit: "2000",
       })),
     ]);
 
@@ -44,6 +44,10 @@ export async function GET(req: NextRequest) {
       // Nunca entrega uma questão que dependa de figura/tirinha/diagrama enquanto
       // o recurso visual oficial ainda não estiver disponível na aplicação.
       if (q.requires_source_visual) return false;
+      // Provas históricas podem conter normas e assuntos que já saíram do edital.
+      // Questão REAL sem vínculo com item ativo do edital fica arquivada, mas não
+      // entra automaticamente no treino corrente do CFS/26.
+      if (q.origin === "REAL" && !q.syllabus_item_id) return false;
       const discipline = disciplineMap.get(q.discipline_id) ?? "";
       if (disciplineFilter && discipline !== disciplineFilter) return false;
       if (originFilter && q.origin !== originFilter) return false;

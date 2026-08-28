@@ -76,6 +76,20 @@ export async function supabaseRpc<T>(functionName: string, payload: Record<strin
   return parseResponse<T>(response);
 }
 
+export async function supabaseInvokeFunction<T>(
+  functionName: string,
+  payload: Record<string, unknown>
+): Promise<T> {
+  const { url } = getConfig();
+  const response = await fetch(`${url}/functions/v1/${encodeURIComponent(functionName)}`, {
+    method: "POST",
+    headers: baseHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+  return parseResponse<T>(response);
+}
+
 export async function supabaseStorageUpload(
   bucket: string,
   objectPath: string,

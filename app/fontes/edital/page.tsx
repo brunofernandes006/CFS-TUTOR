@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type EditalSource = {
@@ -38,7 +38,7 @@ export default function EditalWorkspacePage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadSources() {
+  const loadSources = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -48,20 +48,16 @@ export default function EditalWorkspacePage() {
       const rows = Array.isArray(payload.documents) ? payload.documents : [];
       const official = rows.filter((row: EditalSource) => row.is_official);
       setSources(official);
-      if (!sourceId && official[0]?.id) setSourceId(official[0].id);
+      setSourceId((current) => current || official[0]?.id || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao carregar editais.");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  async function loadCandidates(id: string) {
-    if (!id) {
-      setCandidates([]);
-      setSelected(new Set());
-      return;
-    }
+  const loadCandidates = useCallback(async (id: string) => {
+    if (!id) return;
     setProcessing(true);
     setError(null);
     try {
@@ -76,17 +72,23 @@ export default function EditalWorkspacePage() {
     } finally {
       setProcessing(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { void loadSources(); }, []);
-  useEffect(() => { if (sourceId) void loadCandidates(sourceId); }, [sourceId]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void loadSources(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadSources]);
 
-  const grouped = useMemo(() => {
-    return candidates.reduce<Record<string, Candidate[]>>((acc, candidate) => {
-      (acc[candidate.discipline_code] ??= []).push(candidate);
-      return acc;
-    }, {});
-  }, [candidates]);
+  useEffect(() => {
+    if (!sourceId) return;
+    const timer = window.setTimeout(() => { void loadCandidates(sourceId); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [sourceId, loadCandidates]);
+
+  const grouped = useMemo(() => candidates.reduce<Record<string, Candidate[]>>((acc, candidate) => {
+    (acc[candidate.discipline_code] ??= []).push(candidate);
+    return acc;
+  }, {}), [candidates]);
 
   async function extract() {
     if (!sourceId) return;
@@ -146,16 +148,12 @@ export default function EditalWorkspacePage() {
         <Link href="/fontes" className="text-xs font-bold text-electric-blue">← Central de Fontes</Link>
         <p className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-gold-institution">Edital vigente</p>
         <h1 className="mt-1 text-2xl font-black text-text-primary">Validar árvore de conteúdos</h1>
-        <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-          O sistema só usa itens confirmados de um edital oficial validado. A extração automática gera candidatos; você controla o que entra na árvore de estudo.
-        </p>
+        <p className="mt-2 max-w-3xl text-sm text-text-secondary">O sistema só usa itens confirmados de um edital oficial validado. A extração automática gera candidatos; você controla o que entra na árvore de estudo.</p>
       </header>
 
       <section className="rounded-2xl border border-graphite/40 bg-navy-900 p-5">
         {loading ? <p className="text-sm text-text-muted">Carregando editais...</p> : sources.length === 0 ? (
-          <div className="rounded-xl border border-warning-gold/25 bg-warning-gold/5 p-4 text-sm text-warning-gold">
-            Nenhum edital oficial validado está disponível. Volte à Central de Fontes, envie o edital vigente, marque-o como oficial e confirme a fonte.
-          </div>
+          <div className="rounded-xl border border-warning-gold/25 bg-warning-gold/5 p-4 text-sm text-warning-gold">Nenhum edital oficial validado está disponível. Volte à Central de Fontes, envie o edital vigente, marque-o como oficial e confirme a fonte.</div>
         ) : (
           <>
             <label className="text-xs font-bold text-text-secondary">Edital oficial
@@ -163,9 +161,7 @@ export default function EditalWorkspacePage() {
                 {sources.map((source) => <option key={source.id} value={source.id}>{source.original_name} · {source.extraction_status}</option>)}
               </select>
             </label>
-            <button onClick={extract} disabled={!sourceId || processing} className="mt-4 w-full rounded-xl bg-electric-blue px-4 py-3 text-sm font-black text-white disabled:opacity-40 sm:w-auto">
-              {processing ? "Processando..." : "Extrair itens para revisão"}
-            </button>
+            <button onClick={extract} disabled={!sourceId || processing} className="mt-4 w-full rounded-xl bg-electric-blue px-4 py-3 text-sm font-black text-white disabled:opacity-40 sm:w-auto">{processing ? "Processando..." : "Extrair itens para revisão"}</button>
           </>
         )}
       </section>
@@ -176,10 +172,7 @@ export default function EditalWorkspacePage() {
       {candidates.length > 0 && (
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-text-muted">Revisão humana</p>
-              <h2 className="text-lg font-black text-text-primary">{candidates.length} candidato(s)</h2>
-            </div>
+            <div><p className="text-xs font-bold uppercase tracking-wider text-text-muted">Revisão humana</p><h2 className="text-lg font-black text-text-primary">{candidates.length} candidato(s)</h2></div>
             <button onClick={() => setSelected(new Set(candidates.map((candidate) => candidate.id)))} className="rounded-lg border border-graphite/40 px-3 py-2 text-xs font-bold text-text-secondary">Selecionar todos</button>
           </div>
 
@@ -204,9 +197,7 @@ export default function EditalWorkspacePage() {
           <div className="sticky bottom-20 rounded-2xl border border-electric-blue/30 bg-navy-950/95 p-4 shadow-2xl backdrop-blur">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm font-bold text-text-primary">{selected.size} item(ns) selecionado(s)</p>
-              <button onClick={promoteSelected} disabled={selected.size === 0 || processing} className="rounded-xl bg-success-green px-4 py-3 text-sm font-black text-navy-950 disabled:opacity-40">
-                Confirmar na árvore oficial
-              </button>
+              <button onClick={promoteSelected} disabled={selected.size === 0 || processing} className="rounded-xl bg-success-green px-4 py-3 text-sm font-black text-navy-950 disabled:opacity-40">Confirmar na árvore oficial</button>
             </div>
           </div>
         </section>

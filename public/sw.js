@@ -1,8 +1,8 @@
-const CACHE_NAME = "cfs-tutor-v2-shell-v1";
-const SHELL = ["/", "/manifest.json", "/icon.svg"];
+const CACHE_NAME = "cfs-tutor-v2-static-v2";
+const STATIC_SHELL = ["/manifest.json", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_SHELL)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (event) => {
@@ -17,21 +17,23 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // API/data requests stay network-first to avoid serving stale progress.
-  if (url.pathname.startsWith("/api/")) {
-    event.respondWith(fetch(request).catch(() => new Response(JSON.stringify({ offline: true }), { status: 503, headers: { "Content-Type": "application/json" } })));
+  // Dados e documentos autenticados nunca entram no cache do service worker.
+  if (url.pathname.startsWith("/api/") || request.mode === "navigate" || request.destination === "document") {
+    event.respondWith(fetch(request));
     return;
   }
 
+  // Apenas recursos estáticos do próprio app podem usar cache-first/network-refresh.
   event.respondWith(
-    fetch(request)
-      .then((response) => {
-        if (response.ok) {
+    caches.match(request).then((cached) => {
+      const network = fetch(request).then((response) => {
+        if (response.ok && ["style", "script", "image", "font", "manifest"].includes(request.destination)) {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
         }
         return response;
-      })
-      .catch(() => caches.match(request).then((cached) => cached || caches.match("/")))
+      });
+      return cached || network;
+    })
   );
 });

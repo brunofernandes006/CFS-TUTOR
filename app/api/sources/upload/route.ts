@@ -4,6 +4,7 @@ import { classifySourceDocument } from "@/lib/services/documentClassifier";
 import {
   isSupabaseConfigured,
   supabaseInsert,
+  supabaseInvokeFunction,
   supabaseSelect,
   supabaseStorageUpload,
 } from "@/lib/server/supabaseRest";
@@ -55,6 +56,14 @@ function extractSafeTextSample(buffer: Buffer, mime: string): { sample: string; 
   return { sample: "", status: "PENDING_EXTRACTION" };
 }
 
+type ExtractionResult = {
+  ok: boolean;
+  extractionStatus: string;
+  charCount: number;
+  pageCount: number | null;
+  needsOcr: boolean;
+};
+
 export async function POST(req: NextRequest) {
   try {
     if (!isSupabaseConfigured()) {
@@ -82,8 +91,8 @@ export async function POST(req: NextRequest) {
 
     const originalName = file.name;
     const sanitizedName = safeFileName(originalName);
-    const extracted = extractSafeTextSample(buffer, file.type);
-    const classification = classifySourceDocument(originalName, extracted.sample);
+    const initialExtraction = extractSafeTextSample(buffer, file.type);
+    const classification = classifySourceDocument(originalName, initialExtraction.sample);
     const storedName = `${sha256.slice(0, 12)}-${sanitizedName}`;
     const storagePath = `${classification.destination}/${storedName}`;
     const bucket = process.env.SUPABASE_SOURCE_BUCKET || "cfs-fontes";
@@ -106,13 +115,38 @@ export async function POST(req: NextRequest) {
       detected_year: classification.detected.year ?? null,
       detected_board: classification.detected.board ?? null,
       detected_number: classification.detected.number ?? null,
-      extraction_status: extracted.status,
-      text_excerpt: extracted.sample ? extracted.sample.slice(0, 4000) : null,
+      extraction_status: initialExtraction.status,
+      text_excerpt: initialExtraction.sample ? initialExtraction.sample.slice(0, 4000) : null,
       uploaded_at: new Date().toISOString(),
     };
 
     const inserted = await supabaseInsert<Array<Record<string, unknown>>>("source_documents", metadata);
     const document = Array.isArray(inserted) ? inserted[0] : inserted;
+    const documentId = typeof document?.id === "string" ? document.id : null;
+
+    let extraction: ExtractionResult | null = null;
+    let extractionWarning: string | undefined;
+    const requiresDocumentExtractor = file.type === "application/pdf" || file.type.includes("wordprocessingml");
+
+    if (requiresDocumentExtractor && documentId) {
+      try {
+        extraction = await supabaseInvokeFunction<ExtractionResult>("extract-source", { documentId });
+      } catch (error) {
+        extractionWarning = error instanceof Error
+          ? `Arquivo armazenado, mas a extração automática falhou: ${error.message}`
+          : "Arquivo armazenado, mas a extração automática falhou.";
+      }
+    }
+
+    const warnings = [
+      classification.needsReview
+        ? "A classificação precisa ser confirmada antes de alimentar questões ou conteúdos de estudo."
+        : undefined,
+      extraction?.needsOcr
+        ? "PDF sem texto suficiente detectado. OCR será necessário antes de usar o conteúdo."
+        : undefined,
+      extractionWarning,
+    ].filter(Boolean);
 
     return NextResponse.json(
       {
@@ -120,11 +154,10 @@ export async function POST(req: NextRequest) {
         duplicate: false,
         storage: "supabase",
         classification,
-        extractionStatus: extracted.status,
+        extractionStatus: extraction?.extractionStatus ?? initialExtraction.status,
+        extraction,
         document,
-        warning: classification.needsReview
-          ? "A classificação precisa ser confirmada antes de alimentar questões ou conteúdos de estudo."
-          : undefined,
+        warning: warnings.length > 0 ? warnings.join(" ") : undefined,
       },
       { status: 201 }
     );

@@ -41,6 +41,9 @@ export async function GET(req: NextRequest) {
     const valid = questions.filter((q) => {
       if (q.origin === "REAL" && q.validation_status !== "VALIDATED_REAL") return false;
       if (q.origin !== "REAL" && !["VALIDATED_INTERNAL", "VALIDATED_REAL"].includes(q.validation_status)) return false;
+      // Nunca entrega uma questão que dependa de figura/tirinha/diagrama enquanto
+      // o recurso visual oficial ainda não estiver disponível na aplicação.
+      if (q.requires_source_visual) return false;
       const discipline = disciplineMap.get(q.discipline_id) ?? "";
       if (disciplineFilter && discipline !== disciplineFilter) return false;
       if (originFilter && q.origin !== originFilter) return false;

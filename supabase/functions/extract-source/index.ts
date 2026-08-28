@@ -10,6 +10,8 @@ type SourceDocument = {
   mime_type: string;
 };
 
+type PdfTextItem = { str?: string; transform?: number[] };
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -26,6 +28,30 @@ function normalizeText(value: string): string {
     .trim();
 }
 
+function renderPdfTextItems(items: PdfTextItem[]): string {
+  let output = "";
+  let lastY: number | null = null;
+
+  for (const item of items) {
+    const text = item.str ?? "";
+    if (!text) continue;
+    const y = Array.isArray(item.transform) && typeof item.transform[5] === "number"
+      ? item.transform[5]
+      : null;
+
+    if (output && y != null && lastY != null && Math.abs(y - lastY) > 2.5) {
+      output += "\n";
+    } else if (output && !output.endsWith("\n") && !output.endsWith(" ")) {
+      output += " ";
+    }
+
+    output += text;
+    if (y != null) lastY = y;
+  }
+
+  return normalizeText(output);
+}
+
 async function extractPdf(bytes: Uint8Array): Promise<{ fullText: string; pages: string[]; pageCount: number }> {
   const pages: string[] = [];
   const pdfParse = pdfParseImport as unknown as (
@@ -34,9 +60,9 @@ async function extractPdf(bytes: Uint8Array): Promise<{ fullText: string; pages:
   ) => Promise<{ text?: string; numpages?: number }>;
 
   const parsed = await pdfParse(Buffer.from(bytes), {
-    pagerender: async (pageData: { getTextContent: () => Promise<{ items: Array<{ str?: string }> }> }) => {
+    pagerender: async (pageData: { getTextContent: () => Promise<{ items: PdfTextItem[] }> }) => {
       const textContent = await pageData.getTextContent();
-      const pageText = normalizeText(textContent.items.map((item) => item.str ?? "").join(" "));
+      const pageText = renderPdfTextItems(textContent.items);
       pages.push(pageText);
       return pageText;
     },
@@ -95,7 +121,7 @@ Deno.serve(async (req: Request) => {
 
     if (document.mime_type === "application/pdf") {
       extracted = await extractPdf(bytes);
-      extractor = "pdf-parse@1.1.1";
+      extractor = "pdf-parse@1.1.1-layout";
     } else if (document.mime_type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
       extracted = await extractDocx(bytes);
       extractor = "mammoth@1.9.1";

@@ -54,6 +54,25 @@ export async function supabaseInsert<T>(table: string, payload: unknown): Promis
   return parseResponse<T>(response);
 }
 
+export async function supabaseUpsert<T>(
+  table: string,
+  payload: unknown,
+  onConflict: string
+): Promise<T> {
+  const { url } = getConfig();
+  const query = new URLSearchParams({ on_conflict: onConflict });
+  const response = await fetch(`${url}/rest/v1/${table}?${query.toString()}`, {
+    method: "POST",
+    headers: baseHeaders({
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates,return=representation",
+    }),
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+  return parseResponse<T>(response);
+}
+
 export async function supabasePatch<T>(table: string, filter: URLSearchParams, payload: unknown): Promise<T> {
   const { url } = getConfig();
   const response = await fetch(`${url}/rest/v1/${table}?${filter.toString()}`, {

@@ -97,6 +97,7 @@ export async function POST(req: NextRequest) {
           source_document_id: sourceDocumentId,
           question_number: candidate.questionNumber,
           correct_option_index: candidate.correctOptionIndex,
+          is_annulled: candidate.isAnnulled,
           source_page: candidate.sourcePage,
           parser_confidence: candidate.confidence,
           raw_fragment: candidate.rawFragment,
@@ -112,8 +113,9 @@ export async function POST(req: NextRequest) {
       mode,
       sourceOfficial: source.is_official,
       extractedCandidates: candidates.length,
+      annulledCandidates: candidates.filter((candidate) => candidate.isAnnulled).length,
       message: candidates.length > 0
-        ? "Entradas de gabarito extraídas como candidatas; nenhuma resposta foi validada automaticamente."
+        ? "Entradas de gabarito extraídas como candidatas; anuladas permanecem sem alternativa correta e nenhuma resposta é validada automaticamente."
         : "Nenhuma entrada de gabarito suficientemente estruturada foi identificada.",
     });
   } catch (error) {

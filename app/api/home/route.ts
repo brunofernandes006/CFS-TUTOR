@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  generateDailyMission,
   getPendingReviews,
   calculateReadinessWithConfidence,
 } from "@/lib/services/pedagogyService";
+import { generateDailyMissionV2 } from "@/lib/services/missionServiceV2";
 import { getDashboardStats } from "@/lib/services/dashboardService";
 import { getSyllabusWithProgress } from "@/lib/services/syllabusService";
 import { getSimulationHistory } from "@/lib/services/simulationService";
@@ -15,7 +15,7 @@ export async function GET() {
   try {
     ensureDefaultUser();
 
-    const mission = generateDailyMission(DEFAULT_USER_ID);
+    const mission = generateDailyMissionV2(DEFAULT_USER_ID);
     const stats = getDashboardStats(DEFAULT_USER_ID);
     const readiness = calculateReadinessWithConfidence(DEFAULT_USER_ID);
     const reviews = getPendingReviews(DEFAULT_USER_ID);
@@ -33,21 +33,12 @@ export async function GET() {
     );
 
     const continueStudying = allItems
-      .filter(
-        (i) =>
-          i.progress?.studied === 1 &&
-          (i.progress?.mastery_score ?? 0) < 90
-      )
+      .filter((i) => i.progress?.studied === 1 && (i.progress?.mastery_score ?? 0) < 90)
       .sort((a, b) => (b.progress?.mastery_score ?? 0) - (a.progress?.mastery_score ?? 0))
       .slice(0, 12);
 
     const recommended = allItems
-      .filter(
-        (i) =>
-          !i.progress ||
-          i.progress.studied === 0 ||
-          (i.progress?.mastery_score ?? 0) < 50
-      )
+      .filter((i) => !i.progress || i.progress.studied === 0 || (i.progress?.mastery_score ?? 0) < 50)
       .sort((a, b) => (a.progress?.mastery_score ?? 0) - (b.progress?.mastery_score ?? 0))
       .slice(0, 12);
 
@@ -62,24 +53,16 @@ export async function GET() {
       "Conhecimentos Profissionais": [],
     };
     for (const item of allItems) {
-      if (item.discipline in byDiscipline) {
-        byDiscipline[item.discipline].push(item);
-      }
+      if (item.discipline in byDiscipline) byDiscipline[item.discipline].push(item);
     }
 
     const cfs26Icc = allItems
-      .filter(
-        (i) =>
-          i.source_reference?.includes("ICC") ||
-          (i as any).cfs26_priority === 1
-      )
+      .filter((i) => i.source_reference?.includes("ICC") || (i as SyllabusItemWithProgress & { cfs26_priority?: number }).cfs26_priority === 1)
       .slice(0, 20);
 
     const db = getDb();
     const documents = db
-      .prepare(
-        `SELECT * FROM documents ORDER BY cfs26_priority DESC, titulo ASC LIMIT 20`
-      )
+      .prepare(`SELECT * FROM documents ORDER BY cfs26_priority DESC, titulo ASC LIMIT 20`)
       .all();
 
     const simulations = getSimulationHistory(DEFAULT_USER_ID).slice(0, 3);
@@ -92,8 +75,10 @@ export async function GET() {
         xp_to_next: stats.xp_to_next,
         streak: stats.streak,
         accuracy: stats.accuracy,
-        readiness_display: readiness.readiness_display,
-        confidence_label: readiness.confidence_label,
+        readiness: {
+          readiness_display: readiness.readiness_display,
+          confidence_label: readiness.confidence_label,
+        },
       },
       reviews: { overdue, today, upcoming },
       continueStudying,

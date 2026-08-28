@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
+import { PWARegister } from "@/components/PWARegister";
 
 export const metadata: Metadata = {
   title: "CFS Tutor — Sargento PMESP",
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR">
       <body>
+        <PWARegister />
         <AppShell>{children}</AppShell>
       </body>
     </html>

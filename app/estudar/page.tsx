@@ -47,7 +47,6 @@ export default function EstudarPage() {
 
   useEffect(() => {
     let active = true;
-    setError(null);
     fetch(`/api/syllabus?filter=${filter}`, { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("Falha ao carregar edital");
@@ -69,6 +68,13 @@ export default function EstudarPage() {
     return Array.from(map.entries()).sort((a, b) => (b[1][0]?.weightedShare ?? 0) - (a[1][0]?.weightedShare ?? 0));
   }, [payload.items]);
 
+  function changeFilter(next: FilterKey) {
+    if (next === filter) return;
+    setError(null);
+    setLoading(true);
+    setFilter(next);
+  }
+
   return (
     <div className="min-h-screen bg-navy pb-20">
       <TopNav />
@@ -81,7 +87,7 @@ export default function EstudarPage() {
 
         <div className="mt-5 flex gap-2 overflow-x-auto pb-2" aria-label="Filtros de estudo">
           {FILTERS.map((item) => (
-            <button key={item.key} type="button" onClick={() => { setLoading(true); setFilter(item.key); }} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold ${filter === item.key ? "border-electric-blue/50 bg-electric-blue/10 text-electric-blue" : "border-graphite/40 bg-navy-900 text-text-secondary"}`}>
+            <button key={item.key} type="button" onClick={() => changeFilter(item.key)} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold ${filter === item.key ? "border-electric-blue/50 bg-electric-blue/10 text-electric-blue" : "border-graphite/40 bg-navy-900 text-text-secondary"}`}>
               {item.label}
             </button>
           ))}

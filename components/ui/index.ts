@@ -27,9 +27,6 @@ export { LoadingState } from "./LoadingState";
 export { AlertPanel } from "./AlertPanel";
 export { Modal } from "./Modal";
 
-// Input components
-export { SearchBar } from "./SearchBar";
-
-// Legacy components (keep for backwards compatibility)
+// Transitional components still used by migrated screens.
 export { Card, CardTitle } from "./Card";
 export { Loading } from "./Loading";

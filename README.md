@@ -98,6 +98,12 @@ npm run build
 
 Nunca exponha `SUPABASE_SERVICE_ROLE_KEY` no navegador, em variáveis `NEXT_PUBLIC_*` ou no repositório.
 
+## Deploy de preview
+
+A branch `rebuild/cfs-tutor-v2` deve ser publicada na Vercel como **Preview Deployment**. A branch `main` permanece como Production enquanto a V2 estiver em validação.
+
+O preview precisa receber as mesmas variáveis de ambiente de servidor necessárias ao Supabase, especialmente `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e `SUPABASE_SOURCE_BUCKET`.
+
 ## Reconstrução
 
 O desenvolvimento ocorre na branch `rebuild/cfs-tutor-v2` e é revisado pelo Pull Request #1. A `main` permanece preservada até o quality gate ficar verde e as funções críticas da V2 estarem validadas.

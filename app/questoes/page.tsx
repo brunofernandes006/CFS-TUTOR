@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { TopNav } from "@/components/streaming/TopNav";
 
@@ -35,6 +35,25 @@ const ERROR_TYPES = [
 ] as const;
 
 export default function QuestoesPage() {
+  return (
+    <Suspense fallback={<QuestionsLoading />}>
+      <QuestionsContent />
+    </Suspense>
+  );
+}
+
+function QuestionsLoading() {
+  return (
+    <div className="min-h-screen bg-navy pb-20">
+      <TopNav />
+      <main className="mx-auto max-w-3xl px-4 pt-24 md:px-6">
+        <div className="rounded-2xl border border-graphite/40 bg-navy-900 p-5 text-sm text-text-muted">Carregando questões...</div>
+      </main>
+    </div>
+  );
+}
+
+function QuestionsContent() {
   const searchParams = useSearchParams();
   const topicFilter = searchParams.get("syllabusItemId") ?? "";
   const [question, setQuestion] = useState<Question | null>(null);
@@ -82,10 +101,7 @@ export default function QuestoesPage() {
       const response = await fetch("/api/attempts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          questionId: question.id,
-          chosenOptionIndex: optionIndex,
-        }),
+        body: JSON.stringify({ questionId: question.id, chosenOptionIndex: optionIndex }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Falha ao registrar resposta");
@@ -144,7 +160,6 @@ export default function QuestoesPage() {
               <span className="rounded-full bg-navy-800 px-3 py-1 text-text-secondary">{question.discipline}</span>
               {question.questionNumber && <span className="rounded-full bg-navy-800 px-3 py-1 text-text-secondary">Questão {question.questionNumber}</span>}
             </div>
-
             <p className="mt-5 whitespace-pre-wrap text-base font-semibold leading-relaxed text-text-primary">{question.statement}</p>
 
             <div className="mt-5 space-y-2">
@@ -180,7 +195,6 @@ export default function QuestoesPage() {
               </div>
             )}
             {errorClassified && <p className="mt-4 text-xs font-bold text-success-green">Erro registrado no caderno.</p>}
-
             {feedback && <button onClick={() => void loadQuestion()} className="mt-6 w-full rounded-2xl bg-electric-blue px-5 py-3.5 text-sm font-black text-white">Próxima questão</button>}
           </section>
         )}

@@ -1,222 +1,148 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TopNav } from "@/components/streaming/TopNav";
-import { ContentRow } from "@/components/streaming/ContentRow";
-import { StudyContentCard } from "@/components/streaming/StudyContentCard";
-import { SkeletonRow, SkeletonHero } from "@/components/streaming/Skeletons";
-import { useReducedMotion } from "@/hooks/useReducedMotion";
 
-const OFFICIAL_DETAILS = {
-  total: 60,
-  disciplines: [
-    { name: "Português", count: 20, weight: 3 },
-    { name: "Matemática e Raciocínio Lógico", count: 20, weight: 2 },
-    { name: "Conhecimentos Profissionais", count: 20, weight: 5 },
-  ],
-  duration: "3h30",
+type SimulationHistory = {
+  id: string;
+  mode: "OFICIAL" | "ADAPTATIVO";
+  status: "IN_PROGRESS" | "COMPLETED" | "ABANDONED";
+  started_at: string;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  weighted_score: number | null;
+};
+
+type CreateError = {
+  error?: string;
+  discipline?: string;
+  required?: number;
+  available?: number;
 };
 
 const ADAPTIVE_OPTIONS = [10, 20, 30, 40, 60];
 
 export default function SimuladosPage() {
   const router = useRouter();
-  const reducedMotion = useReducedMotion();
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<SimulationHistory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedAdaptive, setSelectedAdaptive] = useState(30);
-  const [officialError, setOfficialError] = useState<string | null>(null);
-  const [officialBusy, setOfficialBusy] = useState(false);
-  const [adaptiveBusy, setAdaptiveBusy] = useState(false);
-  const [availability, setAvailability] = useState<Record<string, number>>({
-    "Língua Portuguesa": 0,
-    "Matemática e Raciocínio Lógico": 0,
-    "Conhecimentos Profissionais": 0,
-  });
+  const [busy, setBusy] = useState<"OFICIAL" | "ADAPTATIVO" | null>(null);
+  const [adaptiveCount, setAdaptiveCount] = useState(30);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/simulations")
-      .then((r) => {
-        if (!r.ok) throw new Error("Erro ao carregar histórico.");
-        return r.json();
+    fetch("/api/simulations", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Não foi possível carregar o histórico.");
+        return (await response.json()) as SimulationHistory[];
       })
-      .then((data) => setHistory(Array.isArray(data) ? data : []))
-      .catch(() => setHistory([]))
+      .then(setHistory)
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Falha ao carregar histórico."))
       .finally(() => setLoading(false));
   }, []);
 
-  const officialStatus = useMemo(() => {
-    const total = Object.values(availability).reduce((s, v) => s + v, 0);
-    return total === 0 ? "Banco insuficiente" : "Disponível";
-  }, [availability]);
-
-  async function handleCreateOfficial() {
-    setOfficialBusy(true);
-    setOfficialError(null);
+  async function createSimulation(mode: "OFICIAL" | "ADAPTATIVO") {
+    setBusy(mode);
+    setError(null);
     try {
-      const res = await fetch("/api/simulations", {
+      const response = await fetch("/api/simulations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "OFICIAL" }),
+        body: JSON.stringify({
+          type: mode,
+          target_questions: mode === "ADAPTATIVO" ? adaptiveCount : 60,
+        }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        if (data?.error === "SIMULATION_INSUFFICIENT_QUESTIONS") {
-          setAvailability({
-            "Língua Portuguesa": data.available?.["Língua Portuguesa"] ?? 0,
-            "Matemática e Raciocínio Lógico": data.available?.["Matemática e Raciocínio Lógico"] ?? 0,
-            "Conhecimentos Profissionais": data.available?.["Conhecimentos Profissionais"] ?? 0,
-          });
-          setOfficialError("Banco insuficiente para gerar um simulado oficial. O banco possui apenas 1 questão ativa.");
-          return;
+      const data = (await response.json()) as { simulation_id?: string } & CreateError;
+      if (!response.ok || !data.simulation_id) {
+        if (data.error === "SIMULATION_INSUFFICIENT_QUESTIONS") {
+          const detail = data.discipline
+            ? `${data.discipline}: ${data.available ?? 0}/${data.required ?? 0} questões reais validadas.`
+            : `${data.available ?? 0}/${data.required ?? adaptiveCount} questões validadas.`;
+          throw new Error(`Banco ainda insuficiente. ${detail}`);
         }
-        setOfficialError(data?.error || "Não foi possível criar o simulado oficial.");
-        return;
+        throw new Error(data.error ?? "Não foi possível criar o simulado.");
       }
       router.push(`/simulados/${data.simulation_id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao criar simulado.");
     } finally {
-      setOfficialBusy(false);
-    }
-  }
-
-  async function handleCreateAdaptive() {
-    setAdaptiveBusy(true);
-    try {
-      const res = await fetch("/api/simulations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "ADAPTATIVO", target_questions: selectedAdaptive }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setOfficialError(data?.error || "Não foi possível criar o simulado adaptativo.");
-        return;
-      }
-      router.push(`/simulados/${data.simulation_id}`);
-    } finally {
-      setAdaptiveBusy(false);
+      setBusy(null);
     }
   }
 
   return (
-    <div className="min-h-screen">
-      <TopNav onSearch={() => {}} />
-
-      {/* Hero */}
-      <section className="relative pt-20 pb-16 px-4 md:px-6 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-t from-navy-900 via-navy-900/60 to-navy-900/20" />
-        <div className="relative z-10 max-w-7xl mx-auto animate-fade-in-up">
-          <p className="text-xs font-bold uppercase tracking-widest text-electric-blue mb-2">
-            Simulados
+    <div className="min-h-screen bg-navy pb-24">
+      <TopNav />
+      <main className="mx-auto max-w-4xl px-4 pt-24 md:px-6">
+        <header>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-institution">MODO PROVA</p>
+          <h1 className="mt-1 text-2xl font-black text-text-primary">Simulados</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-secondary">
+            Sem dicas e sem gabarito durante a aplicação. A análise aparece somente ao finalizar.
           </p>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-text-primary mb-2">
-            🏅 OPERAÇÕES DE TREINAMENTO
-          </h1>
-          <p className="text-sm text-text-secondary max-w-xl">
-            Simulados oficiais e adaptativos para medir seu desempenho real.
-          </p>
-        </div>
-      </section>
+        </header>
 
-      <div className="px-4 md:px-6 max-w-7xl mx-auto pb-10 space-y-10 -mt-8 relative z-10">
-        {/* Official operation */}
-        <StudyContentCard
-          variant="simulation"
-          title="Operação Oficial"
-          subtitle={`60 questões · ${OFFICIAL_DETAILS.duration} · Pesos oficiais (3/2/5)`}
-          icon="🏅"
-          badge={officialStatus}
-          badgeColor={officialStatus === "Disponível" ? "green" : "red"}
-          onClick={handleCreateOfficial}
-          onAction={handleCreateOfficial}
-          actionLabel={officialBusy ? "Gerando..." : "Iniciar Operação Oficial"}
-          animate={!reducedMotion}
-        />
+        <section className="mt-6 rounded-3xl border border-gold-institution/25 bg-navy-900 p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-gold-institution">Simulado oficial</p>
+              <h2 className="mt-1 text-xl font-black text-text-primary">60 questões · distribuição do edital</h2>
+              <p className="mt-2 text-sm text-text-secondary">20 Português (peso 3) · 20 Matemática (peso 2) · 20 Conhecimentos Profissionais (peso 5).</p>
+              <p className="mt-2 text-xs text-text-muted">Este modo exige questões reais validadas e vinculadas a fonte oficial.</p>
+            </div>
+            <button type="button" disabled={busy !== null} onClick={() => void createSimulation("OFICIAL")} className="rounded-2xl bg-gold-institution px-5 py-3 text-sm font-black text-navy-950 disabled:opacity-50">
+              {busy === "OFICIAL" ? "Montando..." : "Iniciar simulado oficial"}
+            </button>
+          </div>
+        </section>
 
-        {/* Adaptive operation */}
-        <div className="relative">
-          <StudyContentCard
-            variant="simulation"
-            title="Operação Adaptativa"
-            subtitle={`Personalizada · Prioriza pontos fracos e revisões`}
-            icon="🎯"
-            badge="Personalizado"
-            badgeColor="blue"
-            onClick={handleCreateAdaptive}
-            onAction={handleCreateAdaptive}
-            actionLabel={adaptiveBusy ? "Gerando..." : "Iniciar Operação Adaptativa"}
-            animate={!reducedMotion}
-          />
-          {/* Quantity selector overlay */}
-          <div className="absolute top-4 right-4 z-20">
-            <select
-              value={selectedAdaptive}
-              onChange={(e) => setSelectedAdaptive(Number(e.target.value))}
-              className="px-2 py-1 rounded-lg text-[10px] font-bold bg-navy-800 text-text-secondary border border-graphite/50 focus:outline-none focus:border-electric-blue"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {ADAPTIVE_OPTIONS.map((o) => (
-                <option key={o} value={o}>{o} questões</option>
-              ))}
+        <section className="mt-4 rounded-3xl border border-electric-blue/25 bg-navy-900 p-5 sm:p-6">
+          <p className="text-xs font-black uppercase tracking-wider text-electric-blue">Treino adaptativo</p>
+          <h2 className="mt-1 text-xl font-black text-text-primary">Prioriza lacunas reais</h2>
+          <p className="mt-2 text-sm text-text-secondary">Considera menor domínio, erros recorrentes e incidência histórica quando já houver dados suficientes.</p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <label className="text-xs font-bold text-text-secondary" htmlFor="adaptive-count">Quantidade</label>
+            <select id="adaptive-count" value={adaptiveCount} onChange={(event) => setAdaptiveCount(Number(event.target.value))} className="rounded-xl border border-graphite/50 bg-navy-800 px-3 py-2 text-sm text-text-primary">
+              {ADAPTIVE_OPTIONS.map((value) => <option key={value} value={value}>{value} questões</option>)}
             </select>
+            <button type="button" disabled={busy !== null} onClick={() => void createSimulation("ADAPTATIVO")} className="rounded-2xl bg-electric-blue px-5 py-3 text-sm font-black text-white disabled:opacity-50">
+              {busy === "ADAPTATIVO" ? "Montando..." : "Iniciar adaptativo"}
+            </button>
           </div>
-        </div>
+        </section>
 
-        {/* Insufficient bank warning */}
-        {officialError && (
-          <div className="rounded-xl border border-alert-red/30 bg-alert-red/5 p-4 animate-fade-in">
-            <p className="text-sm font-bold text-alert-red mb-1">⚠️ {officialError}</p>
-            <p className="text-xs text-text-muted">
-              O banco atual possui apenas 1 questão ativa. Adicione mais questões para usar os simulados.
-            </p>
+        {error && <div className="mt-4 rounded-2xl border border-alert-red/30 bg-alert-red/5 p-4 text-sm text-alert-red">{error}</div>}
+
+        <section className="mt-8">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-black text-text-primary">Histórico</h2>
+            <span className="text-xs text-text-muted">{history.length} registro(s)</span>
           </div>
-        )}
 
-        {/* Availability */}
-        <div className="rounded-xl border border-graphite/30 bg-navy-900 p-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-text-muted mb-3">Disponibilidade por disciplina</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {Object.entries(availability).map(([disc, count]) => (
-              <div key={disc} className="flex items-center justify-between px-3 py-2 rounded-lg bg-navy-800 border border-graphite/30">
-                <span className="text-xs text-text-secondary">{disc}</span>
-                <span className={`text-sm font-bold ${count > 0 ? "text-success-green" : "text-alert-red"}`}>{count}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* History */}
-        {loading ? (
-          <SkeletonRow />
-        ) : history.length === 0 ? (
-          <EmptyState message="Você ainda não concluiu nenhuma Operação." />
-        ) : (
-          <ContentRow title="📊 HISTÓRICO DE OPERAÇÕES" animate={!reducedMotion}>
-            {history.map((item) => (
-              <StudyContentCard
-                key={item.id}
-                variant="simulation"
-                title={`${item.simulation_type} — ${new Date(item.created_at).toLocaleDateString("pt-BR")}`}
-                subtitle={`${item.target_questions} questões · Nota: ${item.weighted_final_score ?? 0}`}
-                badge={item.minimums_met ? "MÍNIMOS" : undefined}
-                badgeColor={item.minimums_met ? "green" : "red"}
-                onClick={() => router.push(`/simulados/${item.id}`)}
-                animate={!reducedMotion}
-              />
-            ))}
-          </ContentRow>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="text-center py-16">
-      <div className="text-4xl mb-4">🏅</div>
-      <p className="text-sm text-text-secondary">{message}</p>
+          {loading ? (
+            <div className="mt-3 rounded-2xl border border-graphite/30 bg-navy-900 p-5 text-sm text-text-muted">Carregando...</div>
+          ) : history.length === 0 ? (
+            <div className="mt-3 rounded-2xl border border-graphite/30 bg-navy-900 p-5 text-sm text-text-secondary">Nenhum simulado registrado ainda.</div>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {history.map((item) => (
+                <button key={item.id} type="button" onClick={() => router.push(`/simulados/${item.id}`)} className="flex w-full items-center justify-between gap-4 rounded-2xl border border-graphite/30 bg-navy-900 p-4 text-left">
+                  <div>
+                    <p className="text-sm font-black text-text-primary">{item.mode === "OFICIAL" ? "Simulado oficial" : "Treino adaptativo"}</p>
+                    <p className="mt-1 text-xs text-text-muted">{new Date(item.started_at).toLocaleString("pt-BR")} · {item.status === "COMPLETED" ? "Concluído" : "Em andamento"}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-black text-gold-institution">{item.weighted_score == null ? "—" : Number(item.weighted_score).toFixed(2)}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-text-muted">nota / 10</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
     </div>
   );
 }

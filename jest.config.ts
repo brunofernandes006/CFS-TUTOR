@@ -14,6 +14,7 @@ const config: Config = {
     "/node_modules/",
     "<rootDir>/__tests__/streaming.test.tsx",
     "<rootDir>/__tests__/streaming-pages.test.tsx",
+    "<rootDir>/__tests__/passo3.test.ts",
   ],
 };
 

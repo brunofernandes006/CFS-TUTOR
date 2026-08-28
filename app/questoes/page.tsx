@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { TopNav } from "@/components/streaming/TopNav";
 
 type Question = {
@@ -34,12 +35,14 @@ const ERROR_TYPES = [
 ] as const;
 
 export default function QuestoesPage() {
+  const searchParams = useSearchParams();
+  const topicFilter = searchParams.get("syllabusItemId") ?? "";
   const [question, setQuestion] = useState<Question | null>(null);
   const [discipline, setDiscipline] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("Escolha uma matéria ou treine com todas.");
+  const [message, setMessage] = useState(topicFilter ? "Buscando uma questão deste tópico para recuperação ativa." : "Escolha uma matéria ou treine com todas.");
   const [errorClassified, setErrorClassified] = useState(false);
   const startedAt = useRef<number>(Date.now());
 
@@ -48,7 +51,10 @@ export default function QuestoesPage() {
     setSelected(null);
     setFeedback(null);
     setErrorClassified(false);
-    const qs = selectedDiscipline ? `?discipline=${encodeURIComponent(selectedDiscipline)}` : "";
+    const params = new URLSearchParams();
+    if (selectedDiscipline) params.set("discipline", selectedDiscipline);
+    if (topicFilter) params.set("syllabusItemId", topicFilter);
+    const qs = params.size > 0 ? `?${params.toString()}` : "";
     try {
       const response = await fetch(`/api/questions${qs}`, { cache: "no-store" });
       if (!response.ok) throw new Error("Falha ao carregar questão");
@@ -62,7 +68,11 @@ export default function QuestoesPage() {
     } finally {
       setLoading(false);
     }
-  }, [discipline]);
+  }, [discipline, topicFilter]);
+
+  useEffect(() => {
+    if (topicFilter) void loadQuestion("");
+  }, [topicFilter, loadQuestion]);
 
   async function answer(optionIndex: number) {
     if (!question || feedback || loading) return;
@@ -109,13 +119,17 @@ export default function QuestoesPage() {
           <p className="mt-2 text-sm text-text-secondary">Uma por vez. O gabarito só aparece depois da sua resposta.</p>
         </header>
 
-        <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
-          {DISCIPLINES.map((item) => (
-            <button key={item || "todas"} type="button" onClick={() => { setDiscipline(item); void loadQuestion(item); }} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold ${discipline === item ? "border-electric-blue/50 bg-electric-blue/10 text-electric-blue" : "border-graphite/40 bg-navy-900 text-text-secondary"}`}>
-              {item || "Todas"}
-            </button>
-          ))}
-        </div>
+        {!topicFilter && (
+          <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
+            {DISCIPLINES.map((item) => (
+              <button key={item || "todas"} type="button" onClick={() => { setDiscipline(item); void loadQuestion(item); }} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold ${discipline === item ? "border-electric-blue/50 bg-electric-blue/10 text-electric-blue" : "border-graphite/40 bg-navy-900 text-text-secondary"}`}>
+                {item || "Todas"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {topicFilter && <p className="mt-5 rounded-xl border border-electric-blue/20 bg-electric-blue/5 p-3 text-xs text-text-secondary">Modo revisão: questões restritas ao tópico selecionado.</p>}
 
         {!question && (
           <section className="mt-6 rounded-2xl border border-graphite/40 bg-navy-900 p-5 text-center">
@@ -168,9 +182,7 @@ export default function QuestoesPage() {
             )}
             {errorClassified && <p className="mt-4 text-xs font-bold text-success-green">Erro registrado no caderno.</p>}
 
-            {feedback && (
-              <button onClick={() => void loadQuestion()} className="mt-6 w-full rounded-2xl bg-electric-blue px-5 py-3.5 text-sm font-black text-white">Próxima questão</button>
-            )}
+            {feedback && <button onClick={() => void loadQuestion()} className="mt-6 w-full rounded-2xl bg-electric-blue px-5 py-3.5 text-sm font-black text-white">Próxima questão</button>}
           </section>
         )}
       </main>

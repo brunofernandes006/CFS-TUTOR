@@ -1,87 +1,28 @@
-# CFS Tutor V2 — Missão Aprovação
+# CFS Tutor V2
 
-Sistema de estudo estratégico para o **CFS / Sargento PMESP**, orientado pelo edital, provas anteriores, gabaritos oficiais e normas válidas.
+PWA mobile-first de estudo estratégico para o CFS/Sargento PMESP.
 
-> Ferramenta independente de estudos. Não oficial e sem vínculo com a Polícia Militar do Estado de São Paulo.
+## Estado da V2
 
-## Objetivo do produto
-
-Reduzir decisão e aumentar rendimento. A tela principal deve responder: **o que estudar agora, por quê, por quanto tempo e qual é a próxima revisão**.
-
-Pesos de referência do edital CFS/26:
-
-- Conhecimentos Profissionais: **50% da nota ponderada**
-- Língua Portuguesa: **30%**
-- Matemática: **20%**
-
-O motor de prioridade combina peso da disciplina, incidência medida em provas, domínio com evidência suficiente, erros recorrentes, revisão vencida e conteúdo ainda não estudado. Incidência histórica só entra no cálculo quando existir dado real extraído de provas cadastradas.
-
-## Fluxo pedagógico
-
-Diagnóstico → Recuperação ativa → Conteúdo essencial → Questão → Correção → Classificação do erro → Questão de confirmação → Revisão futura.
-
-Revisões-base: **24 horas, 7 dias e 30 dias**, adaptadas conforme erro e retenção.
-
-Questões reais somente podem ser validadas quando houver prova rastreável e gabarito oficial associado.
-
-## Central de Fontes
-
-A rota `/fontes` recebe provas, gabaritos, editais, legislação, ICC, diretrizes, notas de instrução, ordens de serviço, despachos, portarias, processos operacionais e materiais complementares.
-
-Pipeline de ingestão:
-
-1. validação de tipo, tamanho e assinatura do arquivo;
-2. sanitização do nome;
-3. SHA-256 e deduplicação;
-4. classificação determinística;
-5. destino lógico por categoria;
-6. extração de texto quando suportada;
-7. fila de validação humana quando necessária;
-8. armazenamento privado no Supabase Storage;
-9. metadados e rastreabilidade no PostgreSQL.
-
-Classificações com confiança insuficiente ficam em `NEEDS_REVIEW` e **não alimentam automaticamente questões ou conteúdo de estudo**.
-
-## Arquitetura V2
-
-- Next.js 16 + React 19 + TypeScript
-- Tailwind CSS 4
-- API Routes server-side
-- Supabase PostgreSQL como banco definitivo
-- Supabase Storage privado para documentos
-- service role somente no servidor
-- RLS habilitado nas tabelas públicas
-- Jest para testes
-- GitHub Actions para lint, testes e build
-- PWA com service worker
-
-A V2 não depende de banco SQLite externo nem de pasta local do Windows.
-
-## Banco de dados
-
-As migrations ficam em `supabase/migrations/` e definem:
-
-- fontes e versões de documentos;
-- disciplinas e árvore do edital;
-- provas e gabaritos;
-- questões com rastreabilidade;
-- tentativas e caderno de erros;
-- domínio e revisões;
-- incidência histórica;
-- sessões de estudo e simulados.
-
-Pesos cadastrados no banco: **Profissionais 50%, Português 30%, Matemática 20%**.
+- Supabase PostgreSQL como banco definitivo.
+- Edital vigente estruturado como árvore de estudo.
+- Questões reais somente com prova e gabarito oficial rastreáveis.
+- Questões históricas só entram no estudo corrente quando correspondem a item ativo do edital atual.
+- Simulado oficial com distribuição 20 Português / 20 Matemática / 20 Conhecimentos Profissionais e pesos 3 / 2 / 5.
+- Revisão adaptativa, caderno de erros, domínio e prioridades baseados em evidência.
+- Central de Fontes com validação de tipo, SHA-256, deduplicação, extração e revisão humana.
+- Acesso pessoal protegido por chave, sessão HttpOnly e APIs server-side.
+- RLS fechado no Supabase; RPCs privilegiadas executáveis somente por `service_role`.
+- PWA não armazena páginas autenticadas nem respostas de API no service worker.
 
 ## Desenvolvimento
 
-Requisito: **Node.js 22+**.
-
 ```bash
-npm ci
+npm install
 npm run dev
 ```
 
-Qualidade:
+Quality gate:
 
 ```bash
 npm run lint
@@ -89,23 +30,17 @@ npm run test:ci
 npm run build
 ```
 
-## Variáveis de ambiente
+## Variáveis de servidor
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY` — somente servidor
-- `SUPABASE_SOURCE_BUCKET`
-- `CFS_DEFAULT_USER_ID`
+```env
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_SOURCE_BUCKET=cfs-fontes
+CFS_DEFAULT_USER_ID=00000000-0000-4000-8000-000000000001
+```
 
-Nunca exponha `SUPABASE_SERVICE_ROLE_KEY` no navegador, em variáveis `NEXT_PUBLIC_*` ou no repositório.
+`SUPABASE_SERVICE_ROLE_KEY` nunca deve ser exposta ao cliente.
 
-## Deploy de preview
+## Regra de fonte
 
-A branch `rebuild/cfs-tutor-v2` deve ser publicada na Vercel como **Preview Deployment**. A branch `main` permanece como Production enquanto a V2 estiver em validação.
-
-O preview precisa receber as mesmas variáveis de ambiente de servidor necessárias ao Supabase, especialmente `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e `SUPABASE_SOURCE_BUCKET`.
-
-## Reconstrução
-
-O desenvolvimento ocorre na branch `rebuild/cfs-tutor-v2` e é revisado pelo Pull Request #1. A `main` permanece preservada até o quality gate ficar verde e as funções críticas da V2 estarem validadas.
-
-Consulte `PRODUCT_V2.md` e `docs/ARCHITECTURE_V2.md` para decisões de produto e arquitetura.
+Uma questão só pode aparecer como `[QUESTÃO REAL]` quando estiver validada contra uma prova rastreável e um gabarito oficial. Questões anuladas não recebem alternativa correta artificial. Elementos visuais obrigatórios precisam ser preservados antes de a questão ser liberada.

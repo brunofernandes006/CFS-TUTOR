@@ -75,10 +75,15 @@ function normalize(input: string): string {
   return input.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function detectYear(corpus: string): number | undefined {
+  const match = corpus.match(/(?:^|\D)(20\d{2})(?=\D|$)/);
+  return match ? Number(match[1]) : undefined;
+}
+
 export function classifySourceDocument(fileName: string, sampleText = ""): ClassificationResult {
   const corpus = `${normalize(fileName)}\n${normalize(sampleText.slice(0, 16000))}`;
   const board = /\bvunesp\b/i.test(corpus) ? "VUNESP" : /\bfgv\b/i.test(corpus) ? "FGV" : /\bcetro\b/i.test(corpus) ? "CETRO" : undefined;
-  const yearMatch = corpus.match(/\b(20\d{2})\b/);
+  const year = detectYear(corpus);
   const numberMatch = corpus.match(/\b(?:pm\d\s*)?\d{3}\/\d{2}\/\d{2}\b/i);
 
   let best: { rule: Rule; matches: number; score: number } | null = null;
@@ -87,12 +92,12 @@ export function classifySourceDocument(fileName: string, sampleText = ""): Class
     if (matches === 0) continue;
     let score = rule.base + Math.min(14, (matches - 1) * 7);
     if ((rule.category === "PROVA" || rule.category === "GABARITO") && board) score += 6;
-    if ((rule.category === "PROVA" || rule.category === "GABARITO") && yearMatch) score += 4;
+    if ((rule.category === "PROVA" || rule.category === "GABARITO") && year) score += 4;
     score = Math.min(98, score);
     if (!best || score > best.score) best = { rule, matches, score };
   }
 
-  const detected = { board, year: yearMatch ? Number(yearMatch[1]) : undefined, number: numberMatch?.[0] };
+  const detected = { board, year, number: numberMatch?.[0] };
   if (!best) {
     return { category: "OUTRO", confidence: 30, destination: SOURCE_DESTINATIONS.OUTRO, needsReview: true, detected, reasons: ["Nenhuma regra determinística atingiu confiança mínima."] };
   }

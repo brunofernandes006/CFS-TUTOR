@@ -27,6 +27,7 @@ const MORE = [
 
 export function TopNav({ onSearch }: TopNavProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -35,6 +36,16 @@ export function TopNav({ onSearch }: TopNavProps) {
   }, [menuOpen]);
 
   const closeMenu = useCallback(() => setMenuOpen(false), []);
+
+  async function signOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.assign("/login");
+    }
+  }
 
   return (
     <>
@@ -48,16 +59,7 @@ export function TopNav({ onSearch }: TopNavProps) {
           <nav className="hidden items-center gap-1 md:flex" aria-label="Navegação principal">
             {PRIMARY.map((item) => {
               const active = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={active ? "page" : undefined}
-                  className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${active ? "bg-electric-blue/10 text-electric-blue" : "text-text-secondary hover:bg-navy-800 hover:text-text-primary"}`}
-                >
-                  {item.label}
-                </Link>
-              );
+              return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${active ? "bg-electric-blue/10 text-electric-blue" : "text-text-secondary hover:bg-navy-800 hover:text-text-primary"}`}>{item.label}</Link>;
             })}
           </nav>
 
@@ -71,11 +73,7 @@ export function TopNav({ onSearch }: TopNavProps) {
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-graphite/30 bg-navy-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden" aria-label="Navegação principal mobile">
         {PRIMARY.map((item) => {
           const active = pathname === item.href;
-          return (
-            <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold ${active ? "text-electric-blue" : "text-text-muted"}`}>
-              <span className="text-base leading-none">{item.icon}</span><span>{item.label}</span>
-            </Link>
-          );
+          return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold ${active ? "text-electric-blue" : "text-text-muted"}`}><span className="text-base leading-none">{item.icon}</span><span>{item.label}</span></Link>;
         })}
         <button type="button" onClick={() => setMenuOpen(true)} className="flex min-h-14 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-text-muted"><span className="text-base">☰</span><span>Mais</span></button>
       </nav>
@@ -91,12 +89,9 @@ export function TopNav({ onSearch }: TopNavProps) {
             <div className="space-y-1">
               {[...PRIMARY, ...MORE].map((item) => {
                 const active = pathname === item.href;
-                return (
-                  <Link key={item.href} href={item.href} onClick={closeMenu} aria-current={active ? "page" : undefined} className={`flex min-h-12 items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold ${active ? "bg-electric-blue/10 text-electric-blue" : "text-text-secondary hover:bg-navy-900 hover:text-text-primary"}`}>
-                    <span className="w-6 text-center">{item.icon}</span><span>{item.label}</span>
-                  </Link>
-                );
+                return <Link key={item.href} href={item.href} onClick={closeMenu} aria-current={active ? "page" : undefined} className={`flex min-h-12 items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold ${active ? "bg-electric-blue/10 text-electric-blue" : "text-text-secondary hover:bg-navy-900 hover:text-text-primary"}`}><span className="w-6 text-center">{item.icon}</span><span>{item.label}</span></Link>;
               })}
+              <button type="button" onClick={() => void signOut()} disabled={signingOut} className="mt-4 flex min-h-12 w-full items-center gap-3 rounded-xl border border-alert-red/20 px-3 py-2 text-left text-sm font-semibold text-alert-red disabled:opacity-50"><span className="w-6 text-center">↪</span><span>{signingOut ? "Saindo..." : "Sair"}</span></button>
             </div>
           </aside>
         </>

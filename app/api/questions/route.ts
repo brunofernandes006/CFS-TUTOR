@@ -11,6 +11,8 @@ type QuestionRow = {
   question_number: number | null;
   statement: string;
   options: string[];
+  context_text: string | null;
+  requires_source_visual: boolean;
   difficulty: number | null;
   source_page: number | null;
   validation_status: string;
@@ -29,7 +31,7 @@ export async function GET(req: NextRequest) {
     const [disciplines, questions] = await Promise.all([
       supabaseSelect<Discipline[]>("disciplines", new URLSearchParams({ select: "id,name", active: "eq.true" })),
       supabaseSelect<QuestionRow[]>("questions", new URLSearchParams({
-        select: "id,discipline_id,syllabus_item_id,exam_id,origin,question_number,statement,options,difficulty,source_page,validation_status",
+        select: "id,discipline_id,syllabus_item_id,exam_id,origin,question_number,statement,options,context_text,requires_source_visual,difficulty,source_page,validation_status",
         order: "created_at.desc",
         limit: "1000",
       })),
@@ -65,6 +67,8 @@ export async function GET(req: NextRequest) {
         origin: selected.origin,
         label: selected.origin === "REAL" ? "[QUESTÃO REAL]" : selected.origin === "INEDITA" ? "[QUESTÃO INÉDITA]" : "[EXEMPLO DIDÁTICO]",
         questionNumber: selected.question_number,
+        contextText: selected.context_text,
+        requiresSourceVisual: selected.requires_source_visual,
         statement: selected.statement,
         options: selected.options,
         difficulty: selected.difficulty,

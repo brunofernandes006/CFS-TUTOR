@@ -10,6 +10,8 @@ type SimulationQuestion = {
   discipline: string;
   origin: "REAL" | "INEDITA" | "DIDATICA";
   question_number: number | null;
+  context_text: string | null;
+  requires_source_visual: boolean;
   statement: string;
   options: string[];
   chosen_option_index: number | null;
@@ -141,6 +143,13 @@ export default function SimulationRunPage() {
             <span className="rounded-full bg-navy-800 px-3 py-1">{question.discipline}</span>
             <span className="rounded-full bg-navy-800 px-3 py-1">{question.origin === "REAL" ? "[QUESTÃO REAL]" : question.origin === "INEDITA" ? "[QUESTÃO INÉDITA]" : "[EXEMPLO DIDÁTICO]"}</span>
           </div>
+
+          {question.context_text && (
+            <div className="mt-5 rounded-2xl border border-graphite/40 bg-navy-950/70 p-4 sm:p-5">
+              <p className="mb-2 text-[11px] font-black uppercase tracking-[0.14em] text-text-muted">Texto-base da prova</p>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">{question.context_text}</p>
+            </div>
+          )}
 
           <p className="mt-5 whitespace-pre-wrap text-base font-semibold leading-relaxed text-text-primary">{question.statement}</p>
 

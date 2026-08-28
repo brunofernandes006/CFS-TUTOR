@@ -24,26 +24,6 @@ export interface StudyContentCardProps {
   animate?: boolean;
 }
 
-const variantGradients: Record<Variant, string> = {
-  syllabus: "from-electric-blue/5 to-transparent",
-  document: "from-cyan-glow/5 to-transparent",
-  review: "from-warning-gold/5 to-transparent",
-  mission: "from-gold-institution/5 to-transparent",
-  simulation: "from-alert-red/5 to-transparent",
-  question: "from-electric-blue/5 to-transparent",
-  weakness: "from-alert-red/5 to-transparent",
-};
-
-const variantAccent: Record<Variant, string> = {
-  syllabus: "text-electric-blue",
-  document: "text-cyan-glow",
-  review: "text-warning-gold",
-  mission: "text-gold-institution",
-  simulation: "text-alert-red",
-  question: "text-electric-blue",
-  weakness: "text-alert-red",
-};
-
 const badgeColorMap = {
   gold: "bg-gold-institution/15 text-gold-institution border-gold-institution/30",
   blue: "bg-electric-blue/15 text-electric-blue border-electric-blue/30",
@@ -52,161 +32,42 @@ const badgeColorMap = {
 };
 
 export function StudyContentCard({
-  variant,
-  title,
-  subtitle,
-  discipline,
-  progress,
-  mastery,
-  badge,
-  badgeColor = "gold",
-  icon,
-  onClick,
-  onAction,
-  actionLabel,
-  onPreview,
-  onListToggle,
-  inList = false,
-  compact = false,
-  animate = false,
+  title, subtitle, discipline, progress, mastery, badge, badgeColor = "gold", icon,
+  onClick, onAction, actionLabel, onPreview, onListToggle, inList = false,
+  compact = false, animate = false,
 }: StudyContentCardProps) {
+  const safeMastery = mastery == null ? undefined : Math.max(0, Math.min(100, Math.round(mastery)));
+  const safeProgress = progress == null ? undefined : Math.max(0, Math.min(100, Math.round(progress)));
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`
-        group relative w-full text-left rounded-xl border border-graphite/40
-        bg-navy-900 overflow-visible
-        transition-all duration-[200ms] ease-out
-        hover:scale-[1.06] hover:z-30 hover:border-graphite/70
-        hover:shadow-[0_8px_32px_rgba(0,0,0,0.5),0_0_20px_rgba(0,180,255,0.08)]
-        focus-visible:scale-[1.06] focus-visible:z-30
-        focus:outline-none focus:ring-2 focus:ring-electric-blue/40
-        ${compact ? "p-3" : "p-4 sm:p-5"}
-        ${onClick ? "cursor-pointer" : "cursor-default"}
-        ${animate ? "animate-fade-in-up" : ""}
-      `}
-    >
-      {/* Glow layer — appears on hover */}
-      <div className="card-glow absolute inset-0 rounded-xl bg-gradient-to-t from-electric-blue/[0.04] via-transparent to-transparent pointer-events-none" />
-
-      {/* Subtle gradient overlay */}
-      <div
-        className={`absolute inset-0 bg-gradient-to-t ${variantGradients[variant]} pointer-events-none`}
-      />
-
-      {/* Badge top-right */}
-      {badge && (
-        <span
-          className={`
-            absolute top-3 right-3 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest border
-            ${badgeColorMap[badgeColor]}
-          `}
-        >
-          {badge}
-        </span>
-      )}
-
-      {/* Content */}
-      <div className="relative z-10">
-        {/* Discipline tag */}
-        {discipline && (
-          <span className="inline-block text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2">
-            {discipline}
-          </span>
-        )}
-
-        {/* Icon + Title */}
-        <div className="flex items-start gap-2 mb-1">
-          {icon && (
-            <span className="text-lg shrink-0 mt-0.5">{icon}</span>
-          )}
-          <h3 className={`font-semibold leading-snug text-text-primary ${compact ? "text-sm" : "text-base"}`}>
-            {title}
-          </h3>
-        </div>
-
-        {/* Subtitle */}
-        {subtitle && (
-          <p className="text-xs text-text-secondary mt-0.5 line-clamp-2">{subtitle}</p>
-        )}
-
-        {/* Mastery indicator */}
-        {mastery !== undefined && (
-          <div className="flex items-center gap-2 mt-3">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
-              Domínio
-            </span>
-            <span className={`text-xs font-bold ${variantAccent[variant]}`}>
-              {mastery}%
-            </span>
-            <div className="flex-1 h-1 rounded-full bg-graphite/40 overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${variantAccent[variant].replace("text-", "bg-")}`}
-                style={{ width: `${mastery}%` }}
-              />
-            </div>
+    <article className={`relative h-full overflow-hidden rounded-2xl border border-graphite/40 bg-navy-900 ${compact ? "p-3" : "p-4"} ${animate ? "animate-fade-in-up" : ""}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {discipline && <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-text-muted">{discipline}</p>}
+          <div className="flex items-start gap-2">
+            {icon && <span className="shrink-0 text-lg">{icon}</span>}
+            <h3 className="min-w-0 text-sm font-black leading-snug text-text-primary sm:text-base">{title}</h3>
           </div>
-        )}
-
-        {/* Hover detail panel — discipline + mastery + actions */}
-        <div className="card-details mt-3 space-y-2">
-          {discipline && (
-            <p className="text-[10px] text-text-muted">{discipline}</p>
-          )}
-          <div className="flex items-center gap-2">
-            {onAction && (
-              <span
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAction();
-                }}
-                className="inline-flex items-center px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-electric-blue/15 text-electric-blue border border-electric-blue/30 hover:bg-electric-blue/25 transition-colors"
-              >
-                {actionLabel || "Acessar"}
-              </span>
-            )}
-            {onListToggle && (
-              <span
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onListToggle();
-                }}
-                className={`
-                  inline-flex items-center px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border transition-colors
-                  ${inList
-                    ? "bg-success-green/15 text-success-green border-success-green/30 hover:bg-success-green/25"
-                    : "bg-navy-800 text-text-muted border-graphite/50 hover:text-electric-blue hover:border-electric-blue/30"
-                  }
-                `}
-              >
-                {inList ? "✓ Na Lista" : "+ Lista"}
-              </span>
-            )}
-            {onPreview && (
-              <span
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPreview();
-                }}
-                className="inline-flex items-center px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-navy-800 text-text-muted border border-graphite/50 hover:text-text-primary hover:border-graphite transition-colors"
-              >
-                Info
-              </span>
-            )}
-          </div>
+          {subtitle && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-text-secondary">{subtitle}</p>}
         </div>
+        {badge && <span className={`shrink-0 rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${badgeColorMap[badgeColor]}`}>{badge}</span>}
       </div>
 
-      {/* Progress bar at bottom */}
-      {progress !== undefined && (
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-graphite/30">
-          <div
-            className="h-full bg-electric-blue transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
+      {safeMastery !== undefined && (
+        <div className="mt-4">
+          <div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-text-muted"><span>Domínio</span><span className="text-text-primary">{safeMastery}%</span></div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-graphite/30"><div className="h-full rounded-full bg-electric-blue" style={{ width: `${safeMastery}%` }} /></div>
         </div>
       )}
-    </button>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {onClick && <button type="button" onClick={onClick} className="rounded-lg bg-electric-blue/15 px-3 py-2 text-[11px] font-black text-electric-blue">Abrir</button>}
+        {onAction && <button type="button" onClick={onAction} className="rounded-lg border border-graphite/40 bg-navy-800 px-3 py-2 text-[11px] font-bold text-text-secondary">{actionLabel || "Acessar"}</button>}
+        {onListToggle && <button type="button" onClick={onListToggle} className={`rounded-lg border px-3 py-2 text-[11px] font-bold ${inList ? "border-success-green/30 bg-success-green/10 text-success-green" : "border-graphite/40 bg-navy-800 text-text-secondary"}`}>{inList ? "✓ Na Lista" : "+ Lista"}</button>}
+        {onPreview && <button type="button" onClick={onPreview} className="rounded-lg border border-graphite/40 bg-navy-800 px-3 py-2 text-[11px] font-bold text-text-secondary">Info</button>}
+      </div>
+
+      {safeProgress !== undefined && <div className="absolute inset-x-0 bottom-0 h-1 bg-graphite/20"><div className="h-full bg-electric-blue" style={{ width: `${safeProgress}%` }} /></div>}
+    </article>
   );
 }

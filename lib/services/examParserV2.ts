@@ -14,7 +14,8 @@ export type QuestionCandidateV2 = {
 
 export type AnswerKeyCandidateV2 = {
   questionNumber: number;
-  correctOptionIndex: number;
+  correctOptionIndex: number | null;
+  isAnnulled: boolean;
   sourcePage: number;
   rawFragment: string;
   confidence: number;
@@ -148,14 +149,19 @@ export function parseAnswerKeyCandidates(pages: ExtractedSourcePage[]): AnswerKe
   for (const page of [...pages].sort((a, b) => a.page_number - b.page_number)) {
     const lines = page.page_text.replace(/\r\n/g, "\n").split("\n");
     for (const line of lines) {
-      const regex = /(?:^|\s)(\d{1,3})\s*(?:[-–—.:)]\s*)?([A-E])(?=\s|$|[;,|])/gi;
+      const regex = /(?:^|\s)(\d{1,3})\s*(?:[-–—.:)]\s*)?([A-E*])(?=\s|$|[;,|])/gi;
       let match: RegExpExecArray | null;
       while ((match = regex.exec(line)) !== null) {
         const questionNumber = Number(match[1]);
         if (questionNumber < 1 || questionNumber > 100) continue;
-        const correctOptionIndex = match[2].toUpperCase().charCodeAt(0) - 65;
+        const token = match[2].toUpperCase();
+        const isAnnulled = token === "*";
+        const correctOptionIndex = isAnnulled ? null : token.charCodeAt(0) - 65;
         const existing = byNumber.get(questionNumber);
-        if (existing && existing.correctOptionIndex !== correctOptionIndex) {
+        if (
+          existing &&
+          (existing.correctOptionIndex !== correctOptionIndex || existing.isAnnulled !== isAnnulled)
+        ) {
           conflicts.add(questionNumber);
           continue;
         }
@@ -163,9 +169,10 @@ export function parseAnswerKeyCandidates(pages: ExtractedSourcePage[]): AnswerKe
           byNumber.set(questionNumber, {
             questionNumber,
             correctOptionIndex,
+            isAnnulled,
             sourcePage: page.page_number,
             rawFragment: match[0].trim(),
-            confidence: 90,
+            confidence: isAnnulled ? 95 : 90,
           });
         }
       }

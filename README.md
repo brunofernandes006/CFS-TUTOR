@@ -1,96 +1,86 @@
-# CFS Tutor — Missão Aprovação
+# CFS Tutor V2 — Missão Aprovação
 
-Ambiente gamificado de estudo para o **Curso de Formação de Soldados da Polícia Militar do Estado de São Paulo (CFS PMESP)**.
+Sistema de estudo estratégico para o **CFS / Sargento PMESP**, orientado pelo edital, provas anteriores, gabaritos oficiais e normas válidas.
 
-**Versão: 1.3.0 — Streaming + Homologação Final**
+> Ferramenta independente de estudos. Não oficial e sem vínculo com a Polícia Militar do Estado de São Paulo.
 
-## Funcionalidades
+## Objetivo do produto
 
-- **Home Streaming**: Dashboard estilo Netflix com Hero, ContentRows, carrosséis, Minha Lista
-- **Estudar**: Edital completo com 182 itens, filtro por disciplina, progresso, revisão pendente
-- **Questões**: Prática com gabarito, explicação e caderno de erros
-- **Revisão Espaçada**: Sistema de repetição espaçada (1d→3d→7d→15d→30d)
-- **Simulados**: Prova oficial (60 questões, 3h30) e adaptativo
-- **Caderno de Erros**: Registro automático de erros por disciplina
-- **Desempenho**: Indicadores internos de preparação
-- **Biblioteca**: 694 documentos oficiais organizados e pesquisáveis
-- **Tutor IA Offline**: Geração de prompts para estudo assistido (8 objetivos, sem API externa)
-- **Backup**: Exportação e importação de progresso em JSON
-- **Configurações**: Personalização de meta, disciplina foco, aparência
-- **PWA**: Instalável como aplicativo no desktop e mobile
+Reduzir decisão e aumentar rendimento. A tela principal deve responder: **o que estudar agora, por quê, por quanto tempo e qual é a próxima revisão**.
 
-## Como Iniciar
+Pesos de referência do edital CFS/26:
 
-### Windows (Recomendado)
-1. Clique duas vezes em `INICIAR_CFS_TUTOR.bat`
-2. Aguarde o servidor iniciar
-3. O navegador abrirá automaticamente em http://localhost:3000
+- Conhecimentos Profissionais: **50% da nota ponderada**
+- Língua Portuguesa: **30%**
+- Matemática: **20%**
 
-### PowerShell
-```powershell
-.\INICIAR_CFS_TUTOR.ps1
-```
+O motor de prioridade combina peso da disciplina, incidência medida em provas, domínio com evidência suficiente, erros recorrentes, revisão vencida e conteúdo ainda não estudado.
 
-### Manual
+## Fluxo pedagógico
+
+Diagnóstico → Recuperação ativa → Conteúdo essencial → Questão → Correção → Classificação do erro → Questão de confirmação → Revisão futura.
+
+Revisões-base: **24 horas, 7 dias e 30 dias**, adaptadas conforme erro e retenção.
+
+Questões reais somente podem ser marcadas como oficiais quando houver fonte rastreável e gabarito oficial validado.
+
+## Central de Fontes
+
+A rota `/fontes` permite enviar provas, gabaritos, editais, legislação, ICC, diretrizes, notas de instrução, ordens de serviço, despachos, portarias, processos operacionais e materiais complementares.
+
+Pipeline de ingestão:
+
+1. validação de tipo e tamanho;
+2. nome sanitizado;
+3. SHA-256 e deduplicação;
+4. classificação determinística;
+5. destino lógico por categoria;
+6. status de validação;
+7. armazenamento local no desenvolvimento ou Supabase Storage em produção;
+8. metadados no PostgreSQL para rastreabilidade.
+
+Classificações com confiança insuficiente ficam em `NEEDS_REVIEW` e **não alimentam automaticamente o banco de estudo**.
+
+## Arquitetura
+
+- Next.js 16 + React 19 + TypeScript
+- Tailwind CSS 4
+- API Routes server-side
+- Supabase PostgreSQL + Storage privado para produção
+- SQLite legado temporário durante a migração
+- Jest para testes
+- GitHub Actions para lint, testes e build
+- PWA com service worker básico
+
+## Desenvolvimento
+
+Requisito: **Node.js 22+**.
+
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-## Estrutura
+Qualidade:
 
-```
-CFS_TUTOR_APP/
-├── app/                    # Páginas e rotas (Next.js App Router)
-│   ├── api/                # Rotas de API server-side
-│   ├── page.tsx            # Home Streaming (Netflix-style)
-│   ├── missoes/            # Missões do dia
-│   ├── estudar/            # Edital completo (streaming)
-│   ├── questoes/           # Prática de questões (streaming)
-│   ├── revisao/            # Revisão espaçada
-│   ├── simulados/          # Simulados oficial e adaptativo (streaming)
-│   ├── desempenho/         # Indicadores de desempenho
-│   ├── caderno/            # Caderno de erros
-│   ├── biblioteca/         # Documentos oficiais (streaming)
-│   ├── tutor-ia/           # Tutor IA offline
-│   ├── configuracoes/      # Configurações do aluno
-│   └── backup/             # Backup e exportação
-├── components/             # Componentes React
-│   ├── layout/             # AppShell, navegação, drawer mobile
-│   ├── streaming/          # Hero, TopNav, ContentRow, SearchOverlay, Modals
-│   └── ui/                 # TacticalCard, TacticalButton, Modal, EmptyState
-├── hooks/                  # useHomeData, useMyList, useReducedMotion
-├── lib/                    # Lógica de negócio
-│   ├── services/           # Services (pedagogy, simulation, etc.)
-│   ├── db.ts               # Conexão SQLite (better-sqlite3)
-│   └── types.ts            # TypeScript types
-├── public/                 # Ícones, manifest.json
-├── scripts/                # Importador Python
-└── __tests__/              # Testes Jest (197 testes)
+```bash
+npm run lint
+npm run test:ci
+npm run build
 ```
 
-## Design System Streaming
+## Variáveis de ambiente
 
-- **Palette**: Navy (#071a2b), Electric Blue, Gold Institution, Cyan Glow
-- **Animações**: CSS-only (fade-in-up, modal-in, skeleton-pulse, carousel-scroll)
-- **Acessibilidade**: focus-visible, touch targets 44px, ARIA labels, prefers-reduced-motion
-- **Mobile**: Drawer menu, modal slide-up, responsivo 360px–1920px
-- **PWA**: Manifest completo, ícones SVG, standalone mode
+Copie `.env.example` e configure, quando usar Supabase:
 
-## Tecnologias
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY` — somente servidor
+- `SUPABASE_SOURCE_BUCKET`
 
-- **Frontend**: Next.js 16.3, React 19, TypeScript 5, Tailwind CSS 4
-- **Backend**: Next.js API Routes, better-sqlite3
-- **Banco**: SQLite (local, arquivo único)
-- **Testes**: Jest (197 testes, 8 suites)
-- **PWA**: Manifest + icons
+Nunca exponha a service role no cliente.
 
-## Requisitos
+## Migração V2
 
-- Node.js 18+
-- npm 9+
-- Navegador moderno (Chrome, Firefox, Edge)
+A reconstrução está sendo feita na branch `rebuild/cfs-tutor-v2` e revisada pelo Pull Request #1. A `main` permanece preservada até a validação do CI e das funções críticas.
 
-## Licença
-
-Ferramenta de uso pessoal para estudos. Não é oficial da PMESP.
+Consulte `PRODUCT_V2.md` para decisões de produto e arquitetura.

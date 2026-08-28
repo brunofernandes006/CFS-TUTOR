@@ -1,34 +1,33 @@
 "use client";
 
-import { useState, useEffect } from "react";
-
-export interface HomeData {
-  mission: any;
-  stats: any;
-  reviews: any;
-  continueStudying: any[];
-  recommended: any[];
-  weakPoints: any[];
-  byDiscipline: Record<string, any[]>;
-  cfs26Icc: any[];
-  documents: any[];
-  simulations: any[];
-}
+import { useEffect, useState } from "react";
+import type { HomeDataV2 } from "@/lib/typesV2";
 
 export function useHomeData() {
-  const [data, setData] = useState<HomeData | null>(null);
+  const [data, setData] = useState<HomeDataV2 | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/home")
-      .then((r) => {
-        if (!r.ok) throw new Error("Erro ao carregar");
-        return r.json();
+    let active = true;
+    fetch("/api/home", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Erro ao carregar plano");
+        return (await response.json()) as HomeDataV2;
       })
-      .then(setData)
-      .catch(() => setError("Erro ao carregar dados"))
-      .finally(() => setLoading(false));
+      .then((payload) => {
+        if (active) setData(payload);
+      })
+      .catch(() => {
+        if (active) setError("Erro ao carregar dados");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   return { data, loading, error };

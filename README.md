@@ -14,7 +14,7 @@ Pesos de referência do edital CFS/26:
 - Língua Portuguesa: **30%**
 - Matemática: **20%**
 
-O motor de prioridade combina peso da disciplina, incidência medida em provas, domínio com evidência suficiente, erros recorrentes, revisão vencida e conteúdo ainda não estudado.
+O motor de prioridade combina peso da disciplina, incidência medida em provas, domínio com evidência suficiente, erros recorrentes, revisão vencida e conteúdo ainda não estudado. Incidência histórica só entra no cálculo quando existir dado real extraído de provas cadastradas.
 
 ## Fluxo pedagógico
 
@@ -22,35 +22,55 @@ Diagnóstico → Recuperação ativa → Conteúdo essencial → Questão → Co
 
 Revisões-base: **24 horas, 7 dias e 30 dias**, adaptadas conforme erro e retenção.
 
-Questões reais somente podem ser marcadas como oficiais quando houver fonte rastreável e gabarito oficial validado.
+Questões reais somente podem ser validadas quando houver prova rastreável e gabarito oficial associado.
 
 ## Central de Fontes
 
-A rota `/fontes` permite enviar provas, gabaritos, editais, legislação, ICC, diretrizes, notas de instrução, ordens de serviço, despachos, portarias, processos operacionais e materiais complementares.
+A rota `/fontes` recebe provas, gabaritos, editais, legislação, ICC, diretrizes, notas de instrução, ordens de serviço, despachos, portarias, processos operacionais e materiais complementares.
 
 Pipeline de ingestão:
 
-1. validação de tipo e tamanho;
-2. nome sanitizado;
+1. validação de tipo, tamanho e assinatura do arquivo;
+2. sanitização do nome;
 3. SHA-256 e deduplicação;
 4. classificação determinística;
 5. destino lógico por categoria;
-6. status de validação;
-7. armazenamento local no desenvolvimento ou Supabase Storage em produção;
-8. metadados no PostgreSQL para rastreabilidade.
+6. extração de texto quando suportada;
+7. fila de validação humana quando necessária;
+8. armazenamento privado no Supabase Storage;
+9. metadados e rastreabilidade no PostgreSQL.
 
-Classificações com confiança insuficiente ficam em `NEEDS_REVIEW` e **não alimentam automaticamente o banco de estudo**.
+Classificações com confiança insuficiente ficam em `NEEDS_REVIEW` e **não alimentam automaticamente questões ou conteúdo de estudo**.
 
-## Arquitetura
+## Arquitetura V2
 
 - Next.js 16 + React 19 + TypeScript
 - Tailwind CSS 4
 - API Routes server-side
-- Supabase PostgreSQL + Storage privado para produção
-- SQLite legado temporário durante a migração
+- Supabase PostgreSQL como banco definitivo
+- Supabase Storage privado para documentos
+- service role somente no servidor
+- RLS habilitado nas tabelas públicas
 - Jest para testes
 - GitHub Actions para lint, testes e build
-- PWA com service worker básico
+- PWA com service worker
+
+A V2 não depende de banco SQLite externo nem de pasta local do Windows.
+
+## Banco de dados
+
+As migrations ficam em `supabase/migrations/` e definem:
+
+- fontes e versões de documentos;
+- disciplinas e árvore do edital;
+- provas e gabaritos;
+- questões com rastreabilidade;
+- tentativas e caderno de erros;
+- domínio e revisões;
+- incidência histórica;
+- sessões de estudo e simulados.
+
+Pesos cadastrados no banco: **Profissionais 50%, Português 30%, Matemática 20%**.
 
 ## Desenvolvimento
 
@@ -71,16 +91,15 @@ npm run build
 
 ## Variáveis de ambiente
 
-Copie `.env.example` e configure, quando usar Supabase:
-
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY` — somente servidor
 - `SUPABASE_SOURCE_BUCKET`
+- `CFS_DEFAULT_USER_ID`
 
-Nunca exponha a service role no cliente.
+Nunca exponha `SUPABASE_SERVICE_ROLE_KEY` no navegador, em variáveis `NEXT_PUBLIC_*` ou no repositório.
 
-## Migração V2
+## Reconstrução
 
-A reconstrução está sendo feita na branch `rebuild/cfs-tutor-v2` e revisada pelo Pull Request #1. A `main` permanece preservada até a validação do CI e das funções críticas.
+O desenvolvimento ocorre na branch `rebuild/cfs-tutor-v2` e é revisado pelo Pull Request #1. A `main` permanece preservada até o quality gate ficar verde e as funções críticas da V2 estarem validadas.
 
-Consulte `PRODUCT_V2.md` para decisões de produto e arquitetura.
+Consulte `PRODUCT_V2.md` e `docs/ARCHITECTURE_V2.md` para decisões de produto e arquitetura.

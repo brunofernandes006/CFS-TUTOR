@@ -26,6 +26,27 @@ function safeFileName(name: string): string {
     .slice(0, 160) || "documento";
 }
 
+function validateSignature(buffer: Buffer, mime: string): boolean {
+  if (mime === "application/pdf") return buffer.subarray(0, 5).toString("ascii") === "%PDF-";
+  if (mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+    return buffer[0] === 0x50 && buffer[1] === 0x4b;
+  }
+  return true;
+}
+
+function extractSafeTextSample(buffer: Buffer, mime: string): { sample: string; status: string } {
+  if (["text/plain", "text/csv", "application/csv", "application/json"].includes(mime)) {
+    const sample = buffer.subarray(0, 64 * 1024).toString("utf-8").replace(/\0/g, "").slice(0, 16000);
+    if (mime === "application/json") {
+      try { JSON.parse(buffer.toString("utf-8")); } catch { throw new Error("JSON inválido."); }
+    }
+    return { sample, status: "EXTRACTED" };
+  }
+  if (mime === "application/pdf") return { sample: "", status: "PENDING_PDF_EXTRACTION" };
+  if (mime.includes("wordprocessingml")) return { sample: "", status: "PENDING_DOCX_EXTRACTION" };
+  return { sample: "", status: "PENDING_EXTRACTION" };
+}
+
 async function persistLocal(buffer: Buffer, metadata: Record<string, unknown>, destination: string, fileName: string, hash: string) {
   const root = path.join(process.cwd(), ".data", "sources");
   const folder = path.join(root, destination);
@@ -92,10 +113,13 @@ export async function POST(req: NextRequest) {
     if (!ALLOWED_MIME.has(file.type)) return NextResponse.json({ error: `Tipo não permitido: ${file.type || "desconhecido"}.` }, { status: 415 });
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    if (!validateSignature(buffer, file.type)) return NextResponse.json({ error: "O conteúdo do arquivo não corresponde ao tipo declarado." }, { status: 415 });
+
     const sha256 = createHash("sha256").update(buffer).digest("hex");
     const originalName = file.name;
     const sanitizedName = safeFileName(originalName);
-    const classification = classifySourceDocument(originalName);
+    const extracted = extractSafeTextSample(buffer, file.type);
+    const classification = classifySourceDocument(originalName, extracted.sample);
 
     const metadata = {
       original_name: originalName,
@@ -110,6 +134,8 @@ export async function POST(req: NextRequest) {
       detected_year: classification.detected.year ?? null,
       detected_board: classification.detected.board ?? null,
       detected_number: classification.detected.number ?? null,
+      extraction_status: extracted.status,
+      text_excerpt: extracted.sample ? extracted.sample.slice(0, 4000) : null,
       uploaded_at: new Date().toISOString(),
     };
 
@@ -121,6 +147,7 @@ export async function POST(req: NextRequest) {
       duplicate: persisted.duplicate,
       storage: persisted.storage,
       classification,
+      extractionStatus: extracted.status,
       document: persisted.record,
       warning: classification.needsReview ? "A classificação precisa ser confirmada antes de alimentar questões ou conteúdos de estudo." : undefined,
     }, { status: persisted.duplicate ? 200 : 201 });

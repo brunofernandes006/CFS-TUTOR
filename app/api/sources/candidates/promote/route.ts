@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Gabarito incompatível com as alternativas extraídas." }, { status: 409 });
     }
 
-    let syllabusItemId: string | null = body.syllabusItemId ?? null;
+    const syllabusItemId: string | null = body.syllabusItemId ?? null;
     if (syllabusItemId) {
       const syllabusRows = await supabaseSelect<Array<{ id: string; discipline_id: number }>>(
         "syllabus_items",

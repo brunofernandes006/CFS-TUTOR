@@ -22,6 +22,8 @@ type QuestionCandidateRow = {
   source_page: number | null;
   statement: string;
   options: unknown;
+  context_text: string | null;
+  requires_source_visual: boolean;
   status: string;
 };
 
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
 
     const [exams, questionCandidates, answerCandidates, disciplines] = await Promise.all([
       supabaseSelect<ExamRow[]>("exams", new URLSearchParams({ id: `eq.${examId}`, select: "id,status,exam_document_id,answer_key_document_id", limit: "1" })),
-      supabaseSelect<QuestionCandidateRow[]>("question_candidates", new URLSearchParams({ id: `eq.${questionCandidateId}`, select: "id,source_document_id,question_number,source_page,statement,options,status", limit: "1" })),
+      supabaseSelect<QuestionCandidateRow[]>("question_candidates", new URLSearchParams({ id: `eq.${questionCandidateId}`, select: "id,source_document_id,question_number,source_page,statement,options,context_text,requires_source_visual,status", limit: "1" })),
       supabaseSelect<AnswerCandidateRow[]>("answer_key_candidates", new URLSearchParams({ id: `eq.${answerCandidateId}`, select: "id,source_document_id,question_number,correct_option_index,source_page,status", limit: "1" })),
       supabaseSelect<DisciplineRow[]>("disciplines", new URLSearchParams({ code: `eq.${disciplineCode}`, select: "id,code,name", active: "eq.true", limit: "1" })),
     ]);
@@ -121,6 +123,8 @@ export async function POST(req: NextRequest) {
       question_number: questionCandidate.question_number,
       statement: questionCandidate.statement,
       options: questionCandidate.options,
+      context_text: questionCandidate.context_text,
+      requires_source_visual: questionCandidate.requires_source_visual,
       correct_option_index: answerCandidate.correct_option_index,
       explanation: null,
       source_document_id: exam.exam_document_id,

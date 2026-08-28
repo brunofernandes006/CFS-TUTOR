@@ -34,6 +34,15 @@ describe("exam parser V2", () => {
     expect(result.map((item) => [item.questionNumber, item.correctOptionIndex])).toEqual([
       [1, 0], [2, 2], [3, 4], [4, 1],
     ]);
+    expect(result.every((item) => item.isAnnulled === false)).toBe(true);
+  });
+
+  it("preserves an annulled answer-key entry without inventing a correct option", () => {
+    const result = parseAnswerKeyCandidates([{ page_number: 1, page_text: "17 A 18 * 19 D" }]);
+    const annulled = result.find((item) => item.questionNumber === 18);
+    expect(annulled).toBeDefined();
+    expect(annulled?.isAnnulled).toBe(true);
+    expect(annulled?.correctOptionIndex).toBeNull();
   });
 
   it("drops conflicting answer-key entries instead of guessing", () => {

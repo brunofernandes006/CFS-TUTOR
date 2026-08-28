@@ -1,136 +1,100 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  SectionHeader,
-  TacticalCard,
-  TacticalPanel,
-  TacticalButton,
-  DisciplineBadge,
-  StatusBadge,
-  LoadingState,
-  AlertPanel,
-} from "@/components/ui";
-import type { ReviewItem } from "@/lib/types";
+import { useRouter } from "next/navigation";
+import { TopNav } from "@/components/streaming/TopNav";
 
-interface ReviewData {
-  overdue: ReviewItem[];
-  today: ReviewItem[];
-  upcoming: ReviewItem[];
+type ReviewItem = {
+  syllabusItemId: string;
+  title: string;
+  discipline: string;
+  stage: number;
+  nextReviewAt: string;
+  reviewCount: number;
+  lastResult: string | null;
+  overdue: boolean;
+  mastery: number | null;
+  evidenceCount: number;
+};
+
+type ReviewPayload = { overdue: ReviewItem[]; upcoming: ReviewItem[]; all: ReviewItem[]; setupRequired: boolean };
+
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
 }
 
-const STAGE_LABELS = ["1d", "3d", "7d", "15d", "30d"];
-
 export default function RevisaoPage() {
-  const [data, setData] = useState<ReviewData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const [data, setData] = useState<ReviewPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/reviews")
-      .then((r) => {
-        if (!r.ok) throw new Error("Erro ao carregar revisões.");
-        return r.json();
+    let active = true;
+    fetch("/api/reviews", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Erro ao carregar revisões.");
+        return (await response.json()) as ReviewPayload;
       })
-      .then(setData)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+      .then((payload) => { if (active) setData(payload); })
+      .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Erro ao carregar revisões."); });
+    return () => { active = false; };
   }, []);
 
-  if (loading) return <LoadingState message="Carregando reciclagens..." />;
-  if (error) return (
-    <div className="space-y-6">
-      <SectionHeader title="🔄 Reciclagem" />
-      <AlertPanel type="error" title="Erro ao carregar" message={error} />
-    </div>
-  );
-  if (!data) return null;
-
-  const total = data.overdue.length + data.today.length + data.upcoming.length;
-
   return (
-    <div className="space-y-6">
-      <SectionHeader 
-        title="🔄 Reciclagem"
-        subtitle={`Revisão espaçada · ${total} item${total !== 1 ? "s" : ""} no ciclo`}
-      />
+    <div className="min-h-screen bg-navy pb-20">
+      <TopNav />
+      <main className="mx-auto max-w-4xl px-4 pt-24 md:px-6">
+        <header>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-institution">Recuperação ativa</p>
+          <h1 className="mt-1 text-2xl font-black text-text-primary">Revisão</h1>
+          <p className="mt-2 max-w-2xl text-sm text-text-secondary">Primeiro tente recuperar o conteúdo. A explicação vem depois da tentativa, não antes.</p>
+        </header>
 
-      <div className="max-w-4xl mx-auto w-full space-y-6">
-        {/* Modelo de revisão */}
-        <TacticalPanel title="📖 Modelo Espaçado">
-          <div className="flex flex-wrap gap-2">
-            {["❌ Erro → 1d", "✓ 1º → 3d", "✓✓ 2º → 7d", "✓✓✓ 3º → 15d", "✓✓✓✓ 4º+ → 30d"].map((s, i) => (
-              <span key={i} className="px-3 py-1.5 rounded text-xs font-bold uppercase bg-navy-800 text-text-secondary border border-graphite">
-                {s}
-              </span>
-            ))}
-          </div>
-        </TacticalPanel>
+        {error && <p className="mt-6 rounded-2xl border border-alert-red/30 bg-alert-red/5 p-4 text-sm text-alert-red">{error}</p>}
+        {!data && !error && <div className="mt-6 space-y-3"><div className="skeleton h-28" /><div className="skeleton h-28" /></div>}
 
-        {total === 0 ? (
-          <AlertPanel
-            type="success"
-            title="Revisões em dia"
-            message="Excelente! Nenhuma revisão pendente. Continue respondendo questões para aprimorar seu domínio."
-          />
-        ) : (
+        {data && (
           <>
-            <ReviewSection title="⚠️ Vencidas" items={data.overdue} accentColor="alert-red" />
-            <ReviewSection title="📅 Para Hoje" items={data.today} accentColor="warning-gold" />
-            <ReviewSection title="🗓️ Próximas" items={data.upcoming} accentColor="electric-blue" />
+            <section className="mt-5 grid grid-cols-3 gap-3">
+              <div className="rounded-2xl border border-alert-red/25 bg-alert-red/5 p-4"><p className="text-2xl font-black text-text-primary">{data.overdue.length}</p><p className="text-xs text-text-secondary">Vencidas</p></div>
+              <div className="rounded-2xl border border-graphite/40 bg-navy-900 p-4"><p className="text-2xl font-black text-text-primary">{data.upcoming.length}</p><p className="text-xs text-text-secondary">Agendadas</p></div>
+              <div className="rounded-2xl border border-graphite/40 bg-navy-900 p-4"><p className="text-2xl font-black text-text-primary">{data.all.length}</p><p className="text-xs text-text-secondary">No ciclo</p></div>
+            </section>
+
+            {data.setupRequired && <p className="mt-5 rounded-2xl border border-warning-gold/30 bg-warning-gold/5 p-4 text-sm text-text-secondary">O edital ainda não foi carregado. Não há revisões para programar.</p>}
+
+            <section className="mt-7">
+              <h2 className="text-lg font-black text-text-primary">Revisar agora</h2>
+              <div className="mt-3 space-y-3">
+                {data.overdue.map((item) => (
+                  <article key={item.syllabusItemId} className="rounded-2xl border border-alert-red/25 bg-navy-900 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div><p className="text-[11px] font-bold uppercase tracking-wider text-gold-institution">{item.discipline}</p><h3 className="mt-1 font-black text-text-primary">{item.title}</h3></div>
+                      <span className="shrink-0 rounded-full bg-alert-red/10 px-2 py-1 text-[10px] font-bold text-alert-red">Vencida</span>
+                    </div>
+                    <p className="mt-2 text-xs text-text-muted">Domínio: {item.mastery == null ? "dados insuficientes" : `${Math.round(item.mastery)}%`} · evidências: {item.evidenceCount}</p>
+                    <button onClick={() => router.push(`/questoes?syllabusItemId=${encodeURIComponent(item.syllabusItemId)}`)} className="mt-4 rounded-xl bg-electric-blue px-4 py-3 text-sm font-black text-white">Iniciar recuperação</button>
+                  </article>
+                ))}
+                {data.overdue.length === 0 && <p className="rounded-2xl border border-graphite/40 bg-navy-900 p-5 text-sm text-text-secondary">Nenhuma revisão vencida.</p>}
+              </div>
+            </section>
+
+            <section className="mt-7">
+              <h2 className="text-lg font-black text-text-primary">Próximas</h2>
+              <div className="mt-3 divide-y divide-graphite/30 rounded-2xl border border-graphite/40 bg-navy-900">
+                {data.upcoming.slice(0, 12).map((item) => (
+                  <div key={item.syllabusItemId} className="flex items-center justify-between gap-4 p-4">
+                    <div className="min-w-0"><p className="truncate text-sm font-bold text-text-primary">{item.title}</p><p className="mt-1 text-xs text-text-muted">{item.discipline}</p></div>
+                    <time className="shrink-0 text-xs font-bold text-text-secondary">{formatDate(item.nextReviewAt)}</time>
+                  </div>
+                ))}
+                {data.upcoming.length === 0 && <p className="p-5 text-sm text-text-secondary">Nenhuma revisão futura agendada.</p>}
+              </div>
+            </section>
           </>
         )}
-      </div>
-    </div>
-  );
-}
-
-function ReviewSection({ title, items, accentColor }: {
-  title: string; items: ReviewItem[]; accentColor: "alert-red" | "warning-gold" | "electric-blue";
-}) {
-  if (items.length === 0) return null;
-  
-  const colorMap = {
-    "alert-red": "text-alert-red border-alert-red",
-    "warning-gold": "text-warning-gold border-warning-gold",
-    "electric-blue": "text-electric-blue border-electric-blue",
-  };
-  
-  return (
-    <div className="space-y-3">
-      <h2 className={`text-sm font-bold uppercase tracking-widest border-l-4 pl-3 py-2 ${colorMap[accentColor]}`}>
-        {title} ({items.length})
-      </h2>
-      <div className="space-y-3">
-        {items.map((item) => (
-          <TacticalCard key={item.syllabus_item_id} bordered>
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <p className="font-bold text-text-primary mb-2">{item.title}</p>
-                <div className="flex items-center gap-2 flex-wrap text-xs">
-                  <DisciplineBadge discipline={item.discipline as "Português" | "Matemática" | "Profissionais"} size="small" />
-                  <span className="px-2 py-1 rounded bg-navy-900 text-electric-blue border border-electric-blue font-bold uppercase">
-                    Domínio: {Math.round(item.mastery_score * 100)}%
-                  </span>
-                  <span className="px-2 py-1 rounded bg-navy-900 text-gold-institution border border-gold-institution font-bold uppercase">
-                    Est. {item.review_stage} (1d-30d)
-                  </span>
-                </div>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-xs text-text-muted mb-1">
-                  {item.next_review
-                    ? new Date(item.next_review + "T12:00:00").toLocaleDateString("pt-BR")
-                    : "—"}
-                </p>
-                <TacticalButton variant="primary" size="small">
-                  Revisar
-                </TacticalButton>
-              </div>
-            </div>
-          </TacticalCard>
-        ))}
-      </div>
+      </main>
     </div>
   );
 }

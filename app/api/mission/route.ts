@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
-import { generateDailyMission } from "@/lib/services/pedagogyService";
-import { DEFAULT_USER_ID } from "@/lib/services/userService";
+import { isSupabaseConfigured } from "@/lib/server/supabaseRest";
+import { loadHomeDataV2 } from "@/lib/server/homeDataV2";
 
 export async function GET() {
   try {
-    const mission = generateDailyMission(DEFAULT_USER_ID);
-    return NextResponse.json(mission);
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({ date: new Date().toISOString().slice(0, 10), targetMinutes: 45, slots: [] });
+    }
+    const data = await loadHomeDataV2();
+    return NextResponse.json(data.mission);
   } catch (err) {
-    console.error("[API /mission]", err);
+    console.error("[API /mission V2]", err);
     return NextResponse.json({ error: "Erro ao gerar missão" }, { status: 500 });
   }
 }

@@ -1,0 +1,13 @@
+name: Regenerate clean lockfile (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  info:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Workflow temporario desativado; mantido apenas porque a integracao bloqueou a exclusao direta."

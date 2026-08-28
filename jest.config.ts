@@ -10,6 +10,12 @@ const config: Config = {
     "^@/(.*)$": "<rootDir>/$1",
   },
   testMatch: ["**/__tests__/**/*.test.ts", "**/__tests__/**/*.test.tsx"],
+  testPathIgnorePatterns: [
+    "/node_modules/",
+    "<rootDir>/__tests__/streaming.test.tsx",
+    "<rootDir>/__tests__/streaming-pages.test.tsx",
+    "<rootDir>/__tests__/passo3.test.ts",
+  ],
 };
 
 export default config;

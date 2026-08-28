@@ -1,96 +1,46 @@
-# CFS Tutor — Missão Aprovação
+# CFS Tutor V2
 
-Ambiente gamificado de estudo para o **Curso de Formação de Soldados da Polícia Militar do Estado de São Paulo (CFS PMESP)**.
+PWA mobile-first de estudo estratégico para o CFS/Sargento PMESP.
 
-**Versão: 1.3.0 — Streaming + Homologação Final**
+## Estado da V2
 
-## Funcionalidades
+- Supabase PostgreSQL como banco definitivo.
+- Edital vigente estruturado como árvore de estudo.
+- Questões reais somente com prova e gabarito oficial rastreáveis.
+- Questões históricas só entram no estudo corrente quando correspondem a item ativo do edital atual.
+- Simulado oficial com distribuição 20 Português / 20 Matemática / 20 Conhecimentos Profissionais e pesos 3 / 2 / 5.
+- Revisão adaptativa, caderno de erros, domínio e prioridades baseados em evidência.
+- Central de Fontes com validação de tipo, SHA-256, deduplicação, extração e revisão humana.
+- Acesso pessoal protegido por chave forte, armazenada apenas como hash, com sessão HttpOnly.
+- RLS fechado no Supabase; RPCs privilegiadas executáveis somente por `service_role`.
+- PWA não armazena páginas autenticadas nem respostas de API no service worker.
 
-- **Home Streaming**: Dashboard estilo Netflix com Hero, ContentRows, carrosséis, Minha Lista
-- **Estudar**: Edital completo com 182 itens, filtro por disciplina, progresso, revisão pendente
-- **Questões**: Prática com gabarito, explicação e caderno de erros
-- **Revisão Espaçada**: Sistema de repetição espaçada (1d→3d→7d→15d→30d)
-- **Simulados**: Prova oficial (60 questões, 3h30) e adaptativo
-- **Caderno de Erros**: Registro automático de erros por disciplina
-- **Desempenho**: Indicadores internos de preparação
-- **Biblioteca**: 694 documentos oficiais organizados e pesquisáveis
-- **Tutor IA Offline**: Geração de prompts para estudo assistido (8 objetivos, sem API externa)
-- **Backup**: Exportação e importação de progresso em JSON
-- **Configurações**: Personalização de meta, disciplina foco, aparência
-- **PWA**: Instalável como aplicativo no desktop e mobile
+## Desenvolvimento
 
-## Como Iniciar
-
-### Windows (Recomendado)
-1. Clique duas vezes em `INICIAR_CFS_TUTOR.bat`
-2. Aguarde o servidor iniciar
-3. O navegador abrirá automaticamente em http://localhost:3000
-
-### PowerShell
-```powershell
-.\INICIAR_CFS_TUTOR.ps1
-```
-
-### Manual
 ```bash
 npm install
 npm run dev
 ```
 
-## Estrutura
+Quality gate:
 
-```
-CFS_TUTOR_APP/
-├── app/                    # Páginas e rotas (Next.js App Router)
-│   ├── api/                # Rotas de API server-side
-│   ├── page.tsx            # Home Streaming (Netflix-style)
-│   ├── missoes/            # Missões do dia
-│   ├── estudar/            # Edital completo (streaming)
-│   ├── questoes/           # Prática de questões (streaming)
-│   ├── revisao/            # Revisão espaçada
-│   ├── simulados/          # Simulados oficial e adaptativo (streaming)
-│   ├── desempenho/         # Indicadores de desempenho
-│   ├── caderno/            # Caderno de erros
-│   ├── biblioteca/         # Documentos oficiais (streaming)
-│   ├── tutor-ia/           # Tutor IA offline
-│   ├── configuracoes/      # Configurações do aluno
-│   └── backup/             # Backup e exportação
-├── components/             # Componentes React
-│   ├── layout/             # AppShell, navegação, drawer mobile
-│   ├── streaming/          # Hero, TopNav, ContentRow, SearchOverlay, Modals
-│   └── ui/                 # TacticalCard, TacticalButton, Modal, EmptyState
-├── hooks/                  # useHomeData, useMyList, useReducedMotion
-├── lib/                    # Lógica de negócio
-│   ├── services/           # Services (pedagogy, simulation, etc.)
-│   ├── db.ts               # Conexão SQLite (better-sqlite3)
-│   └── types.ts            # TypeScript types
-├── public/                 # Ícones, manifest.json
-├── scripts/                # Importador Python
-└── __tests__/              # Testes Jest (197 testes)
+```bash
+npm run lint
+npm run test:ci
+npm run build
 ```
 
-## Design System Streaming
+## Variáveis de servidor
 
-- **Palette**: Navy (#071a2b), Electric Blue, Gold Institution, Cyan Glow
-- **Animações**: CSS-only (fade-in-up, modal-in, skeleton-pulse, carousel-scroll)
-- **Acessibilidade**: focus-visible, touch targets 44px, ARIA labels, prefers-reduced-motion
-- **Mobile**: Drawer menu, modal slide-up, responsivo 360px–1920px
-- **PWA**: Manifest completo, ícones SVG, standalone mode
+```env
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_SOURCE_BUCKET=cfs-fontes
+CFS_DEFAULT_USER_ID=00000000-0000-4000-8000-000000000001
+```
 
-## Tecnologias
+`SUPABASE_SERVICE_ROLE_KEY` nunca deve ser exposta ao cliente. A chave pessoal de acesso não deve ser gravada no repositório nem em variáveis públicas.
 
-- **Frontend**: Next.js 16.3, React 19, TypeScript 5, Tailwind CSS 4
-- **Backend**: Next.js API Routes, better-sqlite3
-- **Banco**: SQLite (local, arquivo único)
-- **Testes**: Jest (197 testes, 8 suites)
-- **PWA**: Manifest + icons
+## Regra de fonte
 
-## Requisitos
-
-- Node.js 18+
-- npm 9+
-- Navegador moderno (Chrome, Firefox, Edge)
-
-## Licença
-
-Ferramenta de uso pessoal para estudos. Não é oficial da PMESP.
+Uma questão só pode aparecer como `[QUESTÃO REAL]` quando estiver validada contra uma prova rastreável e um gabarito oficial. Questões anuladas não recebem alternativa correta artificial. Elementos visuais obrigatórios precisam ser preservados antes de a questão ser liberada.

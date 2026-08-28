@@ -1,317 +1,214 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { TopNav } from "@/components/streaming/TopNav";
-import { ContentRow } from "@/components/streaming/ContentRow";
-import { StudyContentCard } from "@/components/streaming/StudyContentCard";
-import { ContentPreviewModal } from "@/components/streaming/ContentPreviewModal";
-import { SkeletonRow, SkeletonHero } from "@/components/streaming/Skeletons";
-import { useReducedMotion } from "@/hooks/useReducedMotion";
-import type { QuestionWithOptions } from "@/lib/types";
 
-type AnswerState = "unanswered" | "correct" | "wrong";
-
-interface DisciplineRow {
+type Question = {
+  id: string;
   discipline: string;
-  icon: string;
-  variant: "syllabus" | "document" | "review";
-}
+  syllabusItemId: string | null;
+  origin: "REAL" | "INEDITA" | "DIDATICA";
+  label: "[QUESTÃO REAL]" | "[QUESTÃO INÉDITA]" | "[EXEMPLO DIDÁTICO]";
+  questionNumber: number | null;
+  contextText: string | null;
+  requiresSourceVisual: boolean;
+  statement: string;
+  options: string[];
+  difficulty: number | null;
+  sourcePage: number | null;
+};
 
-const DISCIPLINE_ROWS: DisciplineRow[] = [
-  { discipline: "Língua Portuguesa", icon: "📖", variant: "syllabus" },
-  { discipline: "Matemática e Raciocínio Lógico", icon: "🔢", variant: "syllabus" },
-  { discipline: "Conhecimentos Profissionais", icon: "⚙️", variant: "syllabus" },
-];
+type Feedback = {
+  is_correct: boolean;
+  correct_option_index: number;
+  needs_error_classification: boolean;
+  explanation: string | null;
+  next_review_at: string | null;
+  source: { year: number | null; board: string | null; page: number | null; questionNumber: number | null } | null;
+};
+
+const DISCIPLINES = ["", "Conhecimentos Profissionais", "Língua Portuguesa", "Matemática"];
+const ERROR_TYPES = [
+  ["conhecimento", "Conhecimento"], ["esquecimento", "Esquecimento"], ["interpretacao", "Interpretação"],
+  ["distracao", "Distração"], ["calculo", "Cálculo"], ["procedimento", "Procedimento"],
+  ["confusao_de_conceitos", "Confusão de conceitos"], ["pegadinha", "Pegadinha"],
+  ["estrategia_de_prova", "Estratégia de prova"], ["falta_de_tempo", "Falta de tempo"],
+] as const;
 
 export default function QuestoesPage() {
-  const router = useRouter();
-  const reducedMotion = useReducedMotion();
-  const [question, setQuestion] = useState<QuestionWithOptions | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [empty, setEmpty] = useState(false);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [state, setState] = useState<AnswerState>("unanswered");
-  const [xpToast, setXpToast] = useState<number | null>(null);
-  const [discipline, setDiscipline] = useState<string>("");
-  const [preview, setPreview] = useState<{ title: string; discipline?: string; description?: string } | null>(null);
-  const [mode, setMode] = useState<"landing" | "active">("landing");
-
-  const loadQuestion = useCallback(async (disc?: string) => {
-    setLoading(true);
-    setSelected(null);
-    setState("unanswered");
-    const d = disc ?? discipline;
-    const qs = d ? `?discipline=${encodeURIComponent(d)}` : "";
-    try {
-      const res = await fetch(`/api/questions${qs}`);
-      if (!res.ok) throw new Error("Erro");
-      const data = await res.json();
-      if (!data.question) { setEmpty(true); setQuestion(null); }
-      else { setEmpty(false); setQuestion(data.question); setMode("active"); }
-    } catch { setEmpty(true); setQuestion(null); }
-    setLoading(false);
-  }, [discipline]);
-
-  useEffect(() => { loadQuestion(); }, []);
-
-  async function handleAnswer(optionIndex: number) {
-    if (state !== "unanswered" || !question) return;
-    setSelected(optionIndex);
-    const correct = question.options.find((o) => o.is_correct === 1);
-    const isCorrect = optionIndex === correct?.option_index;
-    setState(isCorrect ? "correct" : "wrong");
-    try {
-      const res = await fetch("/api/attempts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          syllabusItemId: question.syllabus_item_id,
-          questionId: question.id,
-          isCorrect,
-          difficulty: question.difficulty,
-          chosenOptionIndex: optionIndex,
-          correctOptionIndex: correct?.option_index,
-          theme: question.theme,
-          subtheme: question.subtheme,
-        }),
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.xp_awarded > 0) { setXpToast(data.xp_awarded); setTimeout(() => setXpToast(null), 2500); }
-    } catch {}
-  }
-
-  function startTraining(disc?: string) {
-    setDiscipline(disc ?? "");
-    loadQuestion(disc);
-  }
-
-  if (mode === "active" && question) {
-    return <ActiveQuestion question={question} selected={selected} state={state} xpToast={xpToast} handleAnswer={handleAnswer} loadQuestion={() => { setMode("landing"); loadQuestion(); }} />;
-  }
-
   return (
-    <div className="min-h-screen">
-      <TopNav onSearch={() => {}} />
+    <Suspense fallback={<QuestionsLoading />}>
+      <QuestionsContent />
+    </Suspense>
+  );
+}
 
-      {/* Hero */}
-      <section className="relative pt-20 pb-16 px-4 md:px-6 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-t from-navy-900 via-navy-900/60 to-navy-900/20" />
-        <div className="relative z-10 max-w-7xl mx-auto animate-fade-in-up">
-          <p className="text-xs font-bold uppercase tracking-widest text-electric-blue mb-2">
-            Questões
-          </p>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-text-primary mb-2">
-            ✏️ TREINAMENTO TÁTICO
-          </h1>
-          <p className="text-sm text-text-secondary max-w-xl">
-            Pratique com questões reais do banco. Filtre por disciplina ou comece diretamente.
-          </p>
-        </div>
-      </section>
-
-      <ContentPreviewModal
-        open={!!preview}
-        onClose={() => setPreview(null)}
-        title={preview?.title ?? ""}
-        discipline={preview?.discipline}
-        description={preview?.description}
-      />
-
-      <div className="px-4 md:px-6 max-w-7xl mx-auto pb-10 space-y-10 -mt-8 relative z-10">
-        {/* Quick start cards */}
-        <ContentRow title="⚡ INICIAR TREINAMENTO" animate={!reducedMotion}>
-          <StudyContentCard
-            variant="question"
-            title="Todas as Disciplinas"
-            subtitle="Questão aleatória de qualquer disciplina"
-            icon="🎯"
-            onClick={() => startTraining("")}
-            onAction={() => startTraining("")}
-            actionLabel="Iniciar"
-            animate={!reducedMotion}
-          />
-          {DISCIPLINE_ROWS.map((row) => (
-            <StudyContentCard
-              key={row.discipline}
-              variant={row.variant}
-              title={row.discipline}
-              subtitle={`${row.icon} Treino focado`}
-              icon={row.icon}
-              onClick={() => startTraining(row.discipline)}
-              onAction={() => startTraining(row.discipline)}
-              actionLabel="Iniciar"
-              animate={!reducedMotion}
-            />
-          ))}
-        </ContentRow>
-
-        {/* Empty state */}
-        {empty && (
-          <div className="text-center py-12 animate-fade-in">
-            <div className="text-4xl mb-4">✏️</div>
-            <p className="text-sm text-text-secondary mb-2">
-              Banco de questões ainda não possui itens suficientes.
-            </p>
-            <p className="text-xs text-text-muted">
-              Adicione questões ao banco para começar o treinamento.
-            </p>
-          </div>
-        )}
-
-        {/* Info */}
-        {!empty && !loading && (
-          <div className="rounded-xl border border-graphite/30 bg-navy-900 p-4">
-            <p className="text-xs font-bold uppercase tracking-widest text-text-muted mb-2">Como funciona</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="px-3 py-2 rounded-lg bg-navy-800 border border-graphite/30">
-                <p className="text-xs font-bold text-electric-blue mb-1">1. Escolha</p>
-                <p className="text-[10px] text-text-muted">Selecione uma disciplina ou comece aleatório</p>
-              </div>
-              <div className="px-3 py-2 rounded-lg bg-navy-800 border border-graphite/30">
-                <p className="text-xs font-bold text-electric-blue mb-1">2. Responda</p>
-                <p className="text-[10px] text-text-muted">Leia, analise e marque a alternativa</p>
-              </div>
-              <div className="px-3 py-2 rounded-lg bg-navy-800 border border-graphite/30">
-                <p className="text-xs font-bold text-electric-blue mb-1">3. Aprenda</p>
-                <p className="text-[10px] text-text-muted">Veja a explicação e ganhe XP</p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+function QuestionsLoading() {
+  return (
+    <div className="min-h-screen bg-navy pb-20">
+      <TopNav />
+      <main className="mx-auto max-w-3xl px-4 pt-24 md:px-6">
+        <div className="rounded-2xl border border-graphite/40 bg-navy-900 p-5 text-sm text-text-muted">Carregando questões...</div>
+      </main>
     </div>
   );
 }
 
-function ActiveQuestion({
-  question, selected, state, xpToast, handleAnswer, loadQuestion,
-}: {
-  question: QuestionWithOptions;
-  selected: number | null;
-  state: AnswerState;
-  xpToast: number | null;
-  handleAnswer: (i: number) => void;
-  loadQuestion: () => void;
-}) {
-  const correctOption = question.options.find((o) => o.is_correct === 1);
+function QuestionsContent() {
+  const searchParams = useSearchParams();
+  const topicFilter = searchParams.get("syllabusItemId") ?? "";
+  const [question, setQuestion] = useState<Question | null>(null);
+  const [discipline, setDiscipline] = useState("");
+  const [selected, setSelected] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState(topicFilter ? "Buscando uma questão deste tópico para recuperação ativa." : "Escolha uma matéria ou treine com todas.");
+  const [errorClassified, setErrorClassified] = useState(false);
+
+  const loadQuestion = useCallback(async (selectedDiscipline = discipline) => {
+    setLoading(true);
+    setSelected(null);
+    setFeedback(null);
+    setErrorClassified(false);
+    const params = new URLSearchParams();
+    if (selectedDiscipline) params.set("discipline", selectedDiscipline);
+    if (topicFilter) params.set("syllabusItemId", topicFilter);
+    const qs = params.size > 0 ? `?${params.toString()}` : "";
+    try {
+      const response = await fetch(`/api/questions${qs}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Falha ao carregar questão");
+      const data = (await response.json()) as { question: Question | null; message?: string };
+      setQuestion(data.question);
+      setMessage(data.question ? "Responda antes de ver o gabarito." : (data.message ?? "Nenhuma questão disponível."));
+    } catch {
+      setQuestion(null);
+      setMessage("Não foi possível carregar a questão.");
+    } finally {
+      setLoading(false);
+    }
+  }, [discipline, topicFilter]);
+
+  useEffect(() => {
+    if (!topicFilter) return;
+    const timer = window.setTimeout(() => { void loadQuestion(""); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [topicFilter, loadQuestion]);
+
+  async function answer(optionIndex: number) {
+    if (!question || feedback || loading) return;
+    setSelected(optionIndex);
+    setLoading(true);
+    try {
+      const response = await fetch("/api/attempts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionId: question.id, chosenOptionIndex: optionIndex }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Falha ao registrar resposta");
+      setFeedback(data as Feedback);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Falha ao registrar resposta.");
+      setSelected(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function classifyError(errorType: string) {
+    if (!question || !feedback?.needs_error_classification || errorClassified) return;
+    const response = await fetch("/api/errors/classify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ questionId: question.id, errorType }),
+    });
+    if (response.ok) setErrorClassified(true);
+  }
 
   return (
-    <div className="min-h-screen">
-      <TopNav onSearch={() => {}} />
-      <div className="pt-20 pb-10 px-4 md:px-6 max-w-4xl mx-auto space-y-6">
-        {/* Back button */}
-        <button
-          type="button"
-          onClick={loadQuestion}
-          className="text-xs font-bold text-text-muted hover:text-electric-blue transition-colors"
-        >
-          ← Voltar ao treinamento
-        </button>
+    <div className="min-h-screen bg-navy pb-20">
+      <TopNav />
+      <main className="mx-auto max-w-3xl px-4 pt-24 md:px-6">
+        <header>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-institution">Treinamento</p>
+          <h1 className="mt-1 text-2xl font-black text-text-primary">Questões</h1>
+          <p className="mt-2 text-sm text-text-secondary">Uma por vez. O gabarito só aparece depois da sua resposta.</p>
+        </header>
 
-        {/* XP Toast */}
-        {xpToast && (
-          <div className="fixed top-4 right-4 px-4 py-3 rounded-lg text-sm font-bold z-50 animate-bounce bg-gold-institution text-navy-950 shadow-lg">
-            +{xpToast} 🏅 Pontos de Mérito!
-          </div>
-        )}
-
-        {/* Meta badges */}
-        <div className="flex flex-wrap gap-2">
-          <span className="px-3 py-1 rounded text-xs font-bold uppercase bg-navy-800 text-gold-institution border border-gold-institution">
-            {question.origin}
-          </span>
-          <span className="px-3 py-1 rounded text-xs font-bold uppercase bg-navy-800 text-electric-blue border border-graphite">
-            {question.discipline}
-          </span>
-          <span className="px-3 py-1 rounded text-xs font-bold uppercase bg-navy-800 text-text-secondary border border-graphite">
-            Nível {question.difficulty}/5
-          </span>
-          {question.theme && (
-            <span className="px-3 py-1 rounded text-xs font-bold uppercase bg-navy-800 text-cyan-glow border border-graphite">
-              {question.theme}
-            </span>
-          )}
-        </div>
-
-        {/* Source (OFICIAL only) */}
-        {question.origin === "OFICIAL" && question.source && (
-          <div className="px-3 py-2 rounded bg-navy-800 border-l-2 border-gold-institution">
-            <p className="text-xs text-text-secondary">
-              <span className="font-bold text-gold-institution">Fonte:</span> {question.source.exam_name} {question.source.exam_year}
-              {question.source.exam_number && ` · Q.${question.source.exam_number}`}
-            </p>
-          </div>
-        )}
-
-        {/* Statement */}
-        <div className="rounded-xl border border-graphite/40 bg-navy-900 p-6">
-          <p className="text-base leading-relaxed text-text-primary">{question.statement}</p>
-        </div>
-
-        {/* Options */}
-        <div className="space-y-3">
-          {question.options.map((opt) => {
-            const isSelected = selected === opt.option_index;
-            const isCorrect = opt.is_correct === 1;
-            const answered = state !== "unanswered";
-            let classes = "border-graphite bg-navy-800 text-text-primary hover:border-electric-blue hover:bg-navy-700 cursor-pointer";
-            if (answered && isCorrect) classes = "border-success-green bg-navy-900 text-success-green";
-            else if (answered && isSelected && !isCorrect) classes = "border-alert-red bg-navy-900 text-alert-red";
-            else if (!answered && isSelected) classes = "border-gold-institution bg-navy-900 text-gold-institution";
-
-            return (
-              <button
-                key={opt.id}
-                onClick={() => handleAnswer(opt.option_index)}
-                disabled={answered}
-                className={`w-full text-left px-4 py-3 rounded border transition-all ${classes} disabled:cursor-not-allowed font-semibold`}
-              >
-                <span className="mr-3 inline-block w-6 text-center font-bold text-text-muted">
-                  {String.fromCharCode(65 + opt.option_index)})
-                </span>
-                {opt.option_text}
-                {answered && isCorrect && <span className="ml-2 text-sm">✓</span>}
-                {answered && isSelected && !isCorrect && <span className="ml-2 text-sm">✕</span>}
+        {!topicFilter && (
+          <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
+            {DISCIPLINES.map((item) => (
+              <button key={item || "todas"} type="button" onClick={() => { setDiscipline(item); void loadQuestion(item); }} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold ${discipline === item ? "border-electric-blue/50 bg-electric-blue/10 text-electric-blue" : "border-graphite/40 bg-navy-900 text-text-secondary"}`}>
+                {item || "Todas"}
               </button>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
 
-        {/* Feedback */}
-        {state !== "unanswered" && (
-          <div className={`rounded-xl border p-6 ${state === "correct" ? "border-success-green/30 bg-success-green/5" : "border-alert-red/30 bg-alert-red/5"}`}>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-2xl">{state === "correct" ? "✅" : "❌"}</span>
-              <div>
-                <p className={`font-bold text-lg ${state === "correct" ? "text-success-green" : "text-alert-red"}`}>
-                  {state === "correct" ? "Resposta Correta!" : "Resposta Incorreta"}
-                </p>
-                {state === "wrong" && correctOption && (
-                  <p className="text-xs text-text-secondary mt-1">
-                    Gabarito: <span className="font-bold text-gold-institution">{String.fromCharCode(65 + correctOption.option_index)}</span>
-                  </p>
-                )}
-              </div>
+        {topicFilter && <p className="mt-5 rounded-xl border border-electric-blue/20 bg-electric-blue/5 p-3 text-xs text-text-secondary">Modo revisão: questões restritas ao tópico selecionado.</p>}
+
+        {!question && (
+          <section className="mt-6 rounded-2xl border border-graphite/40 bg-navy-900 p-5 text-center">
+            <p className="text-sm text-text-secondary">{message}</p>
+            <button onClick={() => void loadQuestion()} disabled={loading} className="mt-4 rounded-xl bg-electric-blue px-5 py-3 text-sm font-black text-white disabled:opacity-50">{loading ? "Carregando..." : "Buscar questão"}</button>
+          </section>
+        )}
+
+        {question && (
+          <section className="mt-6 rounded-3xl border border-graphite/40 bg-navy-900 p-5 sm:p-7">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
+              <span className="rounded-full bg-gold-institution/10 px-3 py-1 text-gold-institution">{question.label}</span>
+              <span className="rounded-full bg-navy-800 px-3 py-1 text-text-secondary">{question.discipline}</span>
+              {question.questionNumber && <span className="rounded-full bg-navy-800 px-3 py-1 text-text-secondary">Questão {question.questionNumber}</span>}
             </div>
-            {question.explanation && (
-              <div className="bg-navy-800 rounded px-3 py-2 mb-6 border-l-2 border-electric-blue">
-                <p className="text-sm leading-relaxed text-text-secondary">
-                  <span className="font-bold text-electric-blue">Explicação:</span> {question.explanation}
-                </p>
+
+            {question.contextText && (
+              <div className="mt-5 rounded-2xl border border-graphite/40 bg-navy-950/70 p-4 sm:p-5">
+                <p className="mb-2 text-[11px] font-black uppercase tracking-[0.14em] text-text-muted">Texto-base da prova</p>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">{question.contextText}</p>
               </div>
             )}
-            <button
-              type="button"
-              onClick={loadQuestion}
-              className="w-full px-6 py-3 rounded-xl bg-electric-blue text-white font-bold text-sm hover:bg-electric-blue/80 transition-colors"
-            >
-              Próxima Questão →
-            </button>
-          </div>
+
+            <p className="mt-5 whitespace-pre-wrap text-base font-semibold leading-relaxed text-text-primary">{question.statement}</p>
+
+            <div className="mt-5 space-y-2">
+              {question.options.map((option, index) => {
+                const answered = feedback != null;
+                const correct = answered && index === feedback.correct_option_index;
+                const wrongSelected = answered && selected === index && !feedback.is_correct;
+                return (
+                  <button key={`${question.id}-${index}`} type="button" disabled={answered || loading} onClick={() => void answer(index)} className={`flex w-full items-start gap-3 rounded-2xl border p-4 text-left text-sm transition ${correct ? "border-success-green/60 bg-success-green/10 text-text-primary" : wrongSelected ? "border-alert-red/60 bg-alert-red/10 text-text-primary" : selected === index ? "border-electric-blue bg-electric-blue/5 text-text-primary" : "border-graphite/40 bg-navy-800/40 text-text-secondary"} disabled:cursor-default`}>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-navy-950 font-black">{String.fromCharCode(65 + index)}</span>
+                    <span className="pt-1 leading-relaxed">{option}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {feedback && (
+              <div className={`mt-6 rounded-2xl border p-4 ${feedback.is_correct ? "border-success-green/30 bg-success-green/5" : "border-alert-red/30 bg-alert-red/5"}`}>
+                <h2 className={`font-black ${feedback.is_correct ? "text-success-green" : "text-alert-red"}`}>{feedback.is_correct ? "Resposta correta" : "Resposta incorreta"}</h2>
+                <p className="mt-2 text-sm text-text-primary">Gabarito: {String.fromCharCode(65 + feedback.correct_option_index)}</p>
+                {feedback.explanation && <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">{feedback.explanation}</p>}
+                {feedback.source && <p className="mt-3 text-xs text-text-muted">Fonte: {feedback.source.board ?? "banca não informada"} {feedback.source.year ?? ""}{feedback.source.page ? ` · pág. ${feedback.source.page}` : ""}</p>}
+              </div>
+            )}
+
+            {feedback?.needs_error_classification && !errorClassified && (
+              <div className="mt-5">
+                <p className="text-sm font-black text-text-primary">Qual foi a causa principal do erro?</p>
+                <p className="mt-1 text-xs text-text-muted">Isso aumenta a precisão do plano de estudo.</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {ERROR_TYPES.map(([value, label]) => <button key={value} onClick={() => void classifyError(value)} className="rounded-full border border-graphite/40 bg-navy-800 px-3 py-2 text-xs font-semibold text-text-secondary">{label}</button>)}
+                </div>
+              </div>
+            )}
+            {errorClassified && <p className="mt-4 text-xs font-bold text-success-green">Erro registrado no caderno.</p>}
+            {feedback && <button onClick={() => void loadQuestion()} className="mt-6 w-full rounded-2xl bg-electric-blue px-5 py-3.5 text-sm font-black text-white">Próxima questão</button>}
+          </section>
         )}
-      </div>
+      </main>
     </div>
   );
 }

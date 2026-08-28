@@ -1,280 +1,143 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { TopNav } from "@/components/streaming/TopNav";
-import { ContentRow } from "@/components/streaming/ContentRow";
-import { StudyContentCard } from "@/components/streaming/StudyContentCard";
-import { ContentPreviewModal } from "@/components/streaming/ContentPreviewModal";
-import { SkeletonRow } from "@/components/streaming/Skeletons";
-import { useMyList } from "@/hooks/useMyList";
-import { useReducedMotion } from "@/hooks/useReducedMotion";
-import type { SyllabusItemWithProgress } from "@/lib/types";
 
-type FilterKey = "todos" | "nao_estudados" | "criticos" | "fracos" | "dominados" | "revisao_pendente";
-
-interface PreviewData {
+type FilterKey = "todos" | "nao_estudados" | "criticos" | "atencao" | "fortes" | "revisao_pendente";
+type StudyItem = {
+  id: string;
   title: string;
-  subtitle?: string;
-  discipline?: string;
-  mastery?: number;
-  description?: string;
-  listId?: string;
+  editalCode: string | null;
+  discipline: string;
+  weightedShare: number;
+  studied: boolean;
+  mastery: number | null;
+  evidenceCount: number;
+  recurrentErrors: number;
+  nextReviewAt: string | null;
+  reviewOverdue: boolean;
+  incidence: number | null;
+};
+
+type ApiPayload = { items: StudyItem[]; setupRequired: boolean };
+
+const FILTERS: Array<{ key: FilterKey; label: string }> = [
+  { key: "todos", label: "Todos" },
+  { key: "nao_estudados", label: "Não estudados" },
+  { key: "criticos", label: "Críticos" },
+  { key: "atencao", label: "Atenção" },
+  { key: "fortes", label: "Fortes" },
+  { key: "revisao_pendente", label: "Revisão vencida" },
+];
+
+function masteryLabel(value: number | null): string {
+  if (value == null) return "Dados insuficientes";
+  if (value >= 90) return `Forte · ${Math.round(value)}%`;
+  if (value >= 80) return `Bom · ${Math.round(value)}%`;
+  if (value >= 70) return `Atenção · ${Math.round(value)}%`;
+  if (value >= 60) return `Fraco · ${Math.round(value)}%`;
+  return `Crítico · ${Math.round(value)}%`;
 }
 
 export default function EstudarPage() {
-  const router = useRouter();
-  const { list, add, remove, has } = useMyList();
-  const reducedMotion = useReducedMotion();
-  const [items, setItems] = useState<SyllabusItemWithProgress[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterKey>("todos");
-  const [showFilters, setShowFilters] = useState(false);
-  const [preview, setPreview] = useState<PreviewData | null>(null);
+  const [payload, setPayload] = useState<ApiPayload>({ items: [], setupRequired: false });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    fetch(`/api/syllabus?filter=${filter}`)
-      .then((r) => { if (!r.ok) throw new Error("Erro"); return r.json(); })
-      .then((data) => { setItems(data); setLoading(false); })
-      .catch(() => { setItems([]); setLoading(false); });
+    let active = true;
+    fetch(`/api/syllabus?filter=${filter}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Falha ao carregar edital");
+        return (await response.json()) as ApiPayload;
+      })
+      .then((data) => { if (active) setPayload(data); })
+      .catch(() => { if (active) setError("Não foi possível carregar os tópicos."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [filter]);
 
-  const byDiscipline = useMemo(() => {
-    const groups: Record<string, SyllabusItemWithProgress[]> = {
-      "Língua Portuguesa": [],
-      "Matemática e Raciocínio Lógico": [],
-      "Conhecimentos Profissionais": [],
-    };
-    items.forEach((i) => {
-      if (i.discipline in groups) groups[i.discipline].push(i);
-    });
-    return groups;
-  }, [items]);
+  const groups = useMemo(() => {
+    const map = new Map<string, StudyItem[]>();
+    for (const item of payload.items) {
+      const current = map.get(item.discipline) ?? [];
+      current.push(item);
+      map.set(item.discipline, current);
+    }
+    return Array.from(map.entries()).sort((a, b) => (b[1][0]?.weightedShare ?? 0) - (a[1][0]?.weightedShare ?? 0));
+  }, [payload.items]);
 
-  const continueStudying = useMemo(
-    () => items.filter((i) => i.progress?.studied === 1 && (i.progress?.mastery_score ?? 0) < 90).slice(0, 12),
-    [items]
-  );
-  const weakPoints = useMemo(
-    () => items.filter((i) => (i.progress?.mastery_score ?? 0) < 40 && i.progress?.studied === 1).slice(0, 12),
-    [items]
-  );
-  const reviewPending = useMemo(
-    () => items.filter((i) => i.progress?.next_review).slice(0, 12),
-    [items]
-  );
-
-  const openPreview = useCallback(
-    (item: SyllabusItemWithProgress) => {
-      if (reducedMotion) { router.push("/estudar"); return; }
-      setPreview({
-        title: item.title,
-        subtitle: item.source_reference ?? undefined,
-        discipline: item.discipline,
-        mastery: item.progress?.mastery_score ?? 0,
-        description: `Domínio: ${item.progress?.mastery_score ?? 0}%. ${item.questions_available} questão(ões) disponível(is).`,
-        listId: `syllabus-${item.id}`,
-      });
-    },
-    [reducedMotion, router]
-  );
-
-  const FILTERS: { key: FilterKey; label: string }[] = [
-    { key: "todos", label: "Todos" },
-    { key: "nao_estudados", label: "Não estudados" },
-    { key: "criticos", label: "Críticos" },
-    { key: "fracos", label: "Fracos" },
-    { key: "dominados", label: "Dominados" },
-    { key: "revisao_pendente", label: "Revisão pendente" },
-  ];
+  function changeFilter(next: FilterKey) {
+    if (next === filter) return;
+    setError(null);
+    setLoading(true);
+    setFilter(next);
+  }
 
   return (
-    <div className="min-h-screen">
-      <TopNav onSearch={() => {}} />
+    <div className="min-h-screen bg-navy pb-20">
+      <TopNav />
+      <main className="mx-auto max-w-5xl px-4 pt-24 md:px-6">
+        <header>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-institution">Edital CFS</p>
+          <h1 className="mt-1 text-2xl font-black text-text-primary">Conteúdo para estudar</h1>
+          <p className="mt-2 max-w-2xl text-sm text-text-secondary">O edital define a árvore. O sistema usa desempenho e revisões para decidir a ordem, sem declarar domínio quando faltam questões.</p>
+        </header>
 
-      <div className="pt-20 pb-10 px-4 md:px-6 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 animate-fade-in-up">
-          <p className="text-xs font-bold uppercase tracking-widest text-electric-blue mb-2">
-            Base de Conteúdo
-          </p>
-          <h1 className="text-2xl sm:text-3xl font-black text-text-primary mb-2">
-            📖 Edital Completo
-          </h1>
-          <p className="text-sm text-text-secondary">
-            {items.length} tópicos para dominar
-          </p>
+        <div className="mt-5 flex gap-2 overflow-x-auto pb-2" aria-label="Filtros de estudo">
+          {FILTERS.map((item) => (
+            <button key={item.key} type="button" onClick={() => changeFilter(item.key)} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold ${filter === item.key ? "border-electric-blue/50 bg-electric-blue/10 text-electric-blue" : "border-graphite/40 bg-navy-900 text-text-secondary"}`}>
+              {item.label}
+            </button>
+          ))}
         </div>
 
-        {/* Filter toggle */}
-        <div className="mb-6">
-          <button
-            type="button"
-            onClick={() => setShowFilters(!showFilters)}
-            className="px-4 py-2 rounded-xl text-sm font-bold uppercase tracking-wider bg-navy-800 text-text-secondary border border-graphite/50 hover:border-electric-blue/30 hover:text-electric-blue transition-colors"
-          >
-            {showFilters ? "Ocultar filtros" : "Filtrar conteúdos"} ({FILTERS.find(f => f.key === filter)?.label})
-          </button>
-          {showFilters && (
-            <div className="mt-3 flex flex-wrap gap-2 animate-fade-in-up">
-              {FILTERS.map((f) => (
-                <button
-                  key={f.key}
-                  type="button"
-                  onClick={() => { setFilter(f.key); setShowFilters(false); }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider border transition-colors ${
-                    filter === f.key
-                      ? "bg-electric-blue/15 text-electric-blue border-electric-blue/30"
-                      : "bg-navy-800 text-text-muted border-graphite/50 hover:border-graphite"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {payload.setupRequired && !loading && (
+          <section className="mt-5 rounded-2xl border border-warning-gold/30 bg-warning-gold/5 p-5">
+            <h2 className="font-black text-text-primary">O edital ainda não foi importado.</h2>
+            <p className="mt-2 text-sm text-text-secondary">Adicione e valide o edital vigente na Central de Fontes. A árvore de estudo não será inventada.</p>
+            <a href="/fontes" className="mt-4 inline-flex rounded-xl bg-electric-blue px-4 py-3 text-sm font-black text-white">Abrir Central de Fontes</a>
+          </section>
+        )}
 
-        <ContentPreviewModal
-          open={!!preview}
-          onClose={() => setPreview(null)}
-          title={preview?.title ?? ""}
-          subtitle={preview?.subtitle}
-          discipline={preview?.discipline}
-          mastery={preview?.mastery}
-          description={preview?.description}
-          onListToggle={
-            preview?.listId
-              ? () => {
-                  has(preview.listId!)
-                    ? remove(preview.listId!)
-                    : add({ id: preview.listId!, type: "syllabus", title: preview.title, discipline: preview.discipline });
-                }
-              : undefined
-          }
-          inList={preview?.listId ? has(preview.listId) : false}
-        />
+        {error && <p className="mt-5 rounded-xl border border-alert-red/30 bg-alert-red/5 p-4 text-sm text-alert-red">{error}</p>}
 
         {loading ? (
-          <div className="space-y-10">
-            {Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} />)}
-          </div>
-        ) : items.length === 0 ? (
-          <EmptyState message="Nenhum item encontrado para este filtro." />
+          <div className="mt-6 space-y-3"><div className="skeleton h-28" /><div className="skeleton h-28" /><div className="skeleton h-28" /></div>
         ) : (
-          <div className="space-y-10">
-            {/* Continue Studying */}
-            {continueStudying.length > 0 && (
-              <ContentRow title="CONTINUAR ESTUDANDO" animate={!reducedMotion}>
-                {continueStudying.map((item) => (
-                  <StudyContentCard
-                    key={item.id}
-                    variant="syllabus"
-                    title={item.title}
-                    subtitle={item.source_reference ?? undefined}
-                    discipline={item.discipline}
-                    mastery={item.progress?.mastery_score ?? 0}
-                    progress={item.progress?.mastery_score ?? 0}
-                    onClick={() => openPreview(item)}
-                    onAction={() => router.push("/estudar")}
-                    actionLabel="Estudar"
-                    onListToggle={() => {
-                      const id = `syllabus-${item.id}`;
-                      has(id) ? remove(id) : add({ id, type: "syllabus", title: item.title, discipline: item.discipline });
-                    }}
-                    inList={has(`syllabus-${item.id}`)}
-                    animate={!reducedMotion}
-                  />
-                ))}
-              </ContentRow>
-            )}
-
-            {/* Weak Points */}
-            {weakPoints.length > 0 && (
-              <ContentRow title="PONTOS FRACOS" animate={!reducedMotion}>
-                {weakPoints.map((item) => (
-                  <StudyContentCard
-                    key={item.id}
-                    variant="weakness"
-                    title={item.title}
-                    discipline={item.discipline}
-                    mastery={item.progress?.mastery_score ?? 0}
-                    badge="FRACO"
-                    badgeColor="red"
-                    onClick={() => openPreview(item)}
-                    onAction={() => router.push("/questoes")}
-                    actionLabel="Treinar"
-                    animate={!reducedMotion}
-                  />
-                ))}
-              </ContentRow>
-            )}
-
-            {/* Review Pending */}
-            {reviewPending.length > 0 && (
-              <ContentRow title="REVISÃO RECOMENDADA" viewAllHref="/revisao" animate={!reducedMotion}>
-                {reviewPending.map((item) => (
-                  <StudyContentCard
-                    key={item.id}
-                    variant="review"
-                    title={item.title}
-                    discipline={item.discipline}
-                    mastery={item.progress?.mastery_score ?? 0}
-                    badge={item.progress?.next_review ? new Date(item.progress.next_review + "T12:00:00").toLocaleDateString("pt-BR") : undefined}
-                    badgeColor="gold"
-                    onClick={() => openPreview(item)}
-                    onAction={() => router.push("/revisao")}
-                    actionLabel="Revisar"
-                    animate={!reducedMotion}
-                  />
-                ))}
-              </ContentRow>
-            )}
-
-            {/* By Discipline */}
-            {Object.entries(byDiscipline).map(([discipline, items]) => {
-              if (items.length === 0) return null;
-              const icon = discipline.includes("Portuguesa") ? "📖" : discipline.includes("Matemática") ? "🔢" : "⚙️";
-              return (
-                <ContentRow
-                  key={discipline}
-                  title={`${icon} ${discipline.toUpperCase()}`}
-                  animate={!reducedMotion}
-                >
-                  {items.slice(0, 16).map((item) => (
-                    <StudyContentCard
-                      key={item.id}
-                      variant="syllabus"
-                      title={item.title}
-                      subtitle={item.source_reference ?? undefined}
-                      discipline={item.discipline}
-                      mastery={item.progress?.mastery_score ?? 0}
-                      progress={item.progress?.mastery_score ?? 0}
-                      onClick={() => openPreview(item)}
-                      onListToggle={() => {
-                        const id = `syllabus-${item.id}`;
-                        has(id) ? remove(id) : add({ id, type: "syllabus", title: item.title, discipline: item.discipline });
-                      }}
-                      inList={has(`syllabus-${item.id}`)}
-                      animate={!reducedMotion}
-                    />
+          <div className="mt-6 space-y-7">
+            {groups.map(([discipline, items]) => (
+              <section key={discipline}>
+                <div className="mb-3 flex items-end justify-between gap-3">
+                  <div><h2 className="text-lg font-black text-text-primary">{discipline}</h2><p className="text-xs text-text-muted">Impacto ponderado: {items[0]?.weightedShare ?? 0}%</p></div>
+                  <span className="text-xs font-bold text-text-muted">{items.length} tópico(s)</span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {items.map((item) => (
+                    <article key={item.id} className="rounded-2xl border border-graphite/40 bg-navy-900 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          {item.editalCode && <p className="text-[10px] font-bold uppercase tracking-wider text-gold-institution">{item.editalCode}</p>}
+                          <h3 className="mt-1 text-sm font-black leading-snug text-text-primary">{item.title}</h3>
+                        </div>
+                        {item.reviewOverdue && <span className="shrink-0 rounded-full bg-alert-red/10 px-2 py-1 text-[10px] font-bold text-alert-red">Revisar</span>}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-text-secondary">
+                        <span className="rounded-lg bg-navy-800 px-2 py-1">{masteryLabel(item.mastery)}</span>
+                        <span className="rounded-lg bg-navy-800 px-2 py-1">Evidências: {item.evidenceCount}</span>
+                        {item.recurrentErrors > 0 && <span className="rounded-lg bg-alert-red/5 px-2 py-1 text-alert-red">Erros recorrentes: {item.recurrentErrors}</span>}
+                        {item.incidence != null && <span className="rounded-lg bg-navy-800 px-2 py-1">Incidência medida</span>}
+                      </div>
+                    </article>
                   ))}
-                </ContentRow>
-              );
-            })}
+                </div>
+              </section>
+            ))}
+            {!payload.setupRequired && groups.length === 0 && <p className="rounded-2xl border border-graphite/40 bg-navy-900 p-5 text-sm text-text-secondary">Nenhum tópico corresponde ao filtro atual.</p>}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="text-center py-20">
-      <div className="text-4xl mb-4">📋</div>
-      <p className="text-sm text-text-secondary">{message}</p>
+      </main>
     </div>
   );
 }

@@ -34,10 +34,7 @@ export function isSupabaseConfigured(): boolean {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
-export async function supabaseSelect<T>(
-  table: string,
-  query: URLSearchParams
-): Promise<T> {
+export async function supabaseSelect<T>(table: string, query: URLSearchParams): Promise<T> {
   const { url } = getConfig();
   const response = await fetch(`${url}/rest/v1/${table}?${query.toString()}`, {
     headers: baseHeaders(),
@@ -50,28 +47,18 @@ export async function supabaseInsert<T>(table: string, payload: unknown): Promis
   const { url } = getConfig();
   const response = await fetch(`${url}/rest/v1/${table}`, {
     method: "POST",
-    headers: baseHeaders({
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-    }),
+    headers: baseHeaders({ "Content-Type": "application/json", Prefer: "return=representation" }),
     body: JSON.stringify(payload),
     cache: "no-store",
   });
   return parseResponse<T>(response);
 }
 
-export async function supabasePatch<T>(
-  table: string,
-  filter: URLSearchParams,
-  payload: unknown
-): Promise<T> {
+export async function supabasePatch<T>(table: string, filter: URLSearchParams, payload: unknown): Promise<T> {
   const { url } = getConfig();
   const response = await fetch(`${url}/rest/v1/${table}?${filter.toString()}`, {
     method: "PATCH",
-    headers: baseHeaders({
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-    }),
+    headers: baseHeaders({ "Content-Type": "application/json", Prefer: "return=representation" }),
     body: JSON.stringify(payload),
     cache: "no-store",
   });
@@ -85,18 +72,15 @@ export async function supabaseStorageUpload(
   mimeType: string
 ): Promise<void> {
   const { url } = getConfig();
-  const response = await fetch(
-    `${url}/storage/v1/object/${encodeURIComponent(bucket)}/${objectPath.split("/").map(encodeURIComponent).join("/")}`,
-    {
-      method: "POST",
-      headers: baseHeaders({
-        "Content-Type": mimeType,
-        "x-upsert": "false",
-      }),
-      body,
-      cache: "no-store",
-    }
-  );
+  const uploadBody = new Uint8Array(body.byteLength);
+  uploadBody.set(body);
+  const encodedPath = objectPath.split("/").map(encodeURIComponent).join("/");
+  const response = await fetch(`${url}/storage/v1/object/${encodeURIComponent(bucket)}/${encodedPath}`, {
+    method: "POST",
+    headers: baseHeaders({ "Content-Type": mimeType, "x-upsert": "false" }),
+    body: uploadBody,
+    cache: "no-store",
+  });
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`Falha ao armazenar arquivo (${response.status}): ${text}`);

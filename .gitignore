@@ -46,6 +46,7 @@ next-env.d.ts
 *.sqlite3
 *.db-shm
 *.db-wal
+/.data/
 
 # backups e exportacoes locais
 /backups/

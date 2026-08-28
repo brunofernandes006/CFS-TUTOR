@@ -11,7 +11,7 @@ PWA mobile-first de estudo estratégico para o CFS/Sargento PMESP.
 - Simulado oficial com distribuição 20 Português / 20 Matemática / 20 Conhecimentos Profissionais e pesos 3 / 2 / 5.
 - Revisão adaptativa, caderno de erros, domínio e prioridades baseados em evidência.
 - Central de Fontes com validação de tipo, SHA-256, deduplicação, extração e revisão humana.
-- Acesso pessoal protegido por chave, sessão HttpOnly e APIs server-side.
+- Acesso pessoal protegido por chave forte, armazenada apenas como hash, com sessão HttpOnly.
 - RLS fechado no Supabase; RPCs privilegiadas executáveis somente por `service_role`.
 - PWA não armazena páginas autenticadas nem respostas de API no service worker.
 
@@ -39,7 +39,7 @@ SUPABASE_SOURCE_BUCKET=cfs-fontes
 CFS_DEFAULT_USER_ID=00000000-0000-4000-8000-000000000001
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` nunca deve ser exposta ao cliente.
+`SUPABASE_SERVICE_ROLE_KEY` nunca deve ser exposta ao cliente. A chave pessoal de acesso não deve ser gravada no repositório nem em variáveis públicas.
 
 ## Regra de fonte
 

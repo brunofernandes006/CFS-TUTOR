@@ -1,12 +1,21 @@
 import fs from "fs";
 
 describe("CFS Tutor V2 UI invariants", () => {
-  it("home is oriented to today's plan and official subject weights", () => {
+  it("home is oriented to today's plan without layout overlap", () => {
     const src = fs.readFileSync("app/page.tsx", "utf-8");
     expect(src).toContain("Plano de hoje");
-    expect(src).toContain("Conhecimentos Profissionais");
-    expect(src).toContain("50");
+    expect(src).toContain("disciplineWeights");
     expect(src).not.toContain("-mt-20");
+  });
+
+  it("official subject weights have a single source of truth", () => {
+    const src = fs.readFileSync("lib/config/studyWeights.ts", "utf-8");
+    expect(src).toContain("Conhecimentos Profissionais");
+    expect(src).toContain("0.5");
+    expect(src).toContain("Língua Portuguesa");
+    expect(src).toContain("0.3");
+    expect(src).toContain("Matemática");
+    expect(src).toContain("0.2");
   });
 
   it("primary mobile navigation is intentionally small", () => {

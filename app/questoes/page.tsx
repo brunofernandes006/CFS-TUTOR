@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { TopNav } from "@/components/streaming/TopNav";
 
@@ -44,7 +44,6 @@ export default function QuestoesPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(topicFilter ? "Buscando uma questão deste tópico para recuperação ativa." : "Escolha uma matéria ou treine com todas.");
   const [errorClassified, setErrorClassified] = useState(false);
-  const startedAt = useRef<number>(Date.now());
 
   const loadQuestion = useCallback(async (selectedDiscipline = discipline) => {
     setLoading(true);
@@ -61,7 +60,6 @@ export default function QuestoesPage() {
       const data = (await response.json()) as { question: Question | null; message?: string };
       setQuestion(data.question);
       setMessage(data.question ? "Responda antes de ver o gabarito." : (data.message ?? "Nenhuma questão disponível."));
-      startedAt.current = Date.now();
     } catch {
       setQuestion(null);
       setMessage("Não foi possível carregar a questão.");
@@ -71,7 +69,9 @@ export default function QuestoesPage() {
   }, [discipline, topicFilter]);
 
   useEffect(() => {
-    if (topicFilter) void loadQuestion("");
+    if (!topicFilter) return;
+    const timer = window.setTimeout(() => { void loadQuestion(""); }, 0);
+    return () => window.clearTimeout(timer);
   }, [topicFilter, loadQuestion]);
 
   async function answer(optionIndex: number) {
@@ -85,7 +85,6 @@ export default function QuestoesPage() {
         body: JSON.stringify({
           questionId: question.id,
           chosenOptionIndex: optionIndex,
-          responseTimeSecs: Math.max(0, Math.round((Date.now() - startedAt.current) / 1000)),
         }),
       });
       const data = await response.json();

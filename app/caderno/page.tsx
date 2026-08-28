@@ -1,188 +1,137 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  SectionHeader,
-  TacticalCard,
-  TacticalButton,
-  DisciplineBadge,
-  SourceBadge,
-  LoadingState,
-  AlertPanel,
-} from "@/components/ui";
+import { useEffect, useMemo, useState } from "react";
+import { TopNav } from "@/components/streaming/TopNav";
 
-interface ErrorEntry {
-  id: number;
-  question_id: number;
-  chosen_option_index: number | null;
-  correct_option_index: number | null;
-  theme: string | null;
-  subtheme: string | null;
-  error_count: number;
-  confusion_type: string | null;
-  last_error_at: string;
-  created_at: string;
+type ErrorEntry = {
+  questionId: string;
+  syllabusItemId: string | null;
+  topic: string | null;
   statement: string;
   discipline: string;
-  origin: string;
-  difficulty: number;
-  options: Array<{ option_index: number; option_text: string; is_correct: number }>;
-}
+  origin: "REAL" | "INEDITA" | "DIDATICA";
+  questionNumber: number | null;
+  sourcePage: number | null;
+  errorType: string | null;
+  errorCount: number;
+  conceptGap: string | null;
+  firstErrorAt: string;
+  lastErrorAt: string;
+  resolvedAt: string | null;
+};
+
+type Payload = { errors: ErrorEntry[]; setupRequired: boolean };
+
+const ERROR_LABELS: Record<string, string> = {
+  conhecimento: "Conhecimento",
+  esquecimento: "Esquecimento",
+  interpretacao: "Interpretação",
+  distracao: "Distração",
+  calculo: "Cálculo",
+  procedimento: "Procedimento",
+  confusao_de_conceitos: "Confusão de conceitos",
+  pegadinha: "Pegadinha",
+  estrategia_de_prova: "Estratégia de prova",
+  falta_de_tempo: "Falta de tempo",
+};
+
+const DISCIPLINES = ["", "Conhecimentos Profissionais", "Língua Portuguesa", "Matemática"];
 
 export default function CadernoPage() {
-  const [entries, setEntries] = useState<ErrorEntry[]>([]);
+  const [payload, setPayload] = useState<Payload>({ errors: [], setupRequired: false });
+  const [discipline, setDiscipline] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
-  const [filterDisc, setFilterDisc] = useState("");
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    const qs = filterDisc ? `?discipline=${encodeURIComponent(filterDisc)}` : "";
-    fetch(`/api/error-notebook${qs}`)
-      .then((r) => {
-        if (!r.ok) throw new Error("Erro ao carregar caderno de erros.");
-        return r.json();
+    let active = true;
+    const query = discipline ? `?discipline=${encodeURIComponent(discipline)}` : "";
+    fetch(`/api/error-notebook${query}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Erro ao carregar caderno de erros.");
+        return (await response.json()) as Payload;
       })
-      .then(setEntries)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [filterDisc]);
+      .then((data) => { if (active) setPayload(data); })
+      .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Erro ao carregar caderno de erros."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [discipline]);
 
-  const toggle = (id: number) =>
-    setExpanded((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-
-  if (loading) return <LoadingState message="Carregando caderno de erros..." />;
-  if (error) return (
-    <div className="space-y-6">
-      <SectionHeader title="📝 Caderno de Erros" />
-      <AlertPanel type="error" title="Erro ao carregar" message={error} />
-    </div>
+  const recurrent = useMemo(
+    () => payload.errors.filter((item) => item.errorCount > 1).sort((a, b) => b.errorCount - a.errorCount),
+    [payload.errors]
   );
 
   return (
-    <div className="space-y-6">
-      <SectionHeader 
-        title="📝 Caderno de Erros"
-        subtitle={`${entries.length} erro${entries.length !== 1 ? "s" : ""} registrado${entries.length !== 1 ? "s" : ""}`}
-      />
+    <div className="min-h-screen bg-navy pb-20">
+      <TopNav />
+      <main className="mx-auto max-w-4xl px-4 pt-24 md:px-6">
+        <header>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-institution">Correção estratégica</p>
+          <h1 className="mt-1 text-2xl font-black text-text-primary">Caderno de Erros</h1>
+          <p className="mt-2 max-w-2xl text-sm text-text-secondary">Erros recentes e reincidentes recebem prioridade. A classificação é baseada na causa informada durante a resolução.</p>
+        </header>
 
-      <div className="max-w-4xl mx-auto w-full space-y-6">
-        {/* Filtro disciplina */}
-        <div className="flex flex-wrap gap-2">
-          {["", "Língua Portuguesa", "Matemática e Raciocínio Lógico", "Conhecimentos Profissionais"].map((d) => (
-            <TacticalButton
-              key={d}
-              variant={filterDisc === d ? "primary" : "secondary"}
-              size="small"
-              onClick={() => setFilterDisc(d)}
-            >
-              {d || "Todas"}
-            </TacticalButton>
+        <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
+          {DISCIPLINES.map((item) => (
+            <button key={item || "todas"} type="button" onClick={() => { setLoading(true); setError(null); setDiscipline(item); }} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold ${discipline === item ? "border-electric-blue/50 bg-electric-blue/10 text-electric-blue" : "border-graphite/40 bg-navy-900 text-text-secondary"}`}>
+              {item || "Todas"}
+            </button>
           ))}
         </div>
 
-        {entries.length === 0 ? (
-          <AlertPanel
-            type="success"
-            title="Nenhum erro"
-            message="Parabéns! Nenhum erro registrado ainda. Continue respondendo questões para aprender."
-          />
-        ) : (
-          <div className="space-y-3">
-            {entries.map((entry) => {
-              const isOpen = expanded.has(entry.id);
-              const chosenOpt = entry.options.find((o) => o.option_index === entry.chosen_option_index);
-              const correctOpt = entry.options.find((o) => o.is_correct === 1);
-              
-              return (
-                <TacticalCard
-                  key={entry.id}
-                  bordered
-                  alert={entry.error_count >= 3 ? "error" : entry.error_count >= 2 ? "warning" : undefined}
-                >
-                  <button
-                    className="w-full text-left flex items-start justify-between gap-4"
-                    onClick={() => toggle(entry.id)}
-                  >
-                    <div className="flex-1">
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        <span className="px-2 py-1 rounded text-xs font-bold uppercase bg-navy-900 text-electric-blue border border-electric-blue">
-                          {entry.origin === "OFICIAL" ? "OFICIAL" : entry.origin === "INÉDITA" ? "INÉDITA" : "DIDÁTICA"}
-                        </span>
-                        <DisciplineBadge 
-                          discipline={entry.discipline as any} 
-                          size="small" 
-                        />
-                        {entry.theme && (
-                          <span className="text-xs px-2 py-0.5 rounded bg-navy-900 text-electric-blue border border-electric-blue font-bold uppercase">
-                            {entry.theme}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm line-clamp-2 text-text-primary mb-2">{entry.statement}</p>
-                      <div className="flex gap-4 text-xs text-text-muted">
-                        <span>📅 {new Date(entry.last_error_at).toLocaleDateString("pt-BR")}</span>
-                        <span>⚙️ Nível {entry.difficulty}/5</span>
-                        {entry.confusion_type && <span>🎯 {entry.confusion_type}</span>}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className={`text-2xl font-bold ${entry.error_count >= 3 ? "text-alert-red" : entry.error_count >= 2 ? "text-warning-gold" : "text-electric-blue"}`}>
-                        {entry.error_count}×
-                      </div>
-                      <p className="text-xs text-text-muted mt-1">erros</p>
-                      <span className="text-xs mt-2 inline-block">{isOpen ? "▼" : "▶"}</span>
-                    </div>
-                  </button>
+        {error && <p className="mt-5 rounded-2xl border border-alert-red/30 bg-alert-red/5 p-4 text-sm text-alert-red">{error}</p>}
+        {loading && <div className="mt-6 space-y-3"><div className="skeleton h-28" /><div className="skeleton h-28" /></div>}
 
-                  {isOpen && (
-                    <div className="mt-4 pt-4 border-t border-graphite space-y-3">
-                      <p className="text-sm text-text-primary leading-relaxed">{entry.statement}</p>
-                      <div className="space-y-2">
-                        {entry.options.map((opt) => {
-                          const isChosen = opt.option_index === entry.chosen_option_index;
-                          const isCorrect = opt.is_correct === 1;
-                          
-                          let borderColor = "border-graphite";
-                          let bgColor = "bg-navy-800";
-                          let textColor = "text-text-primary";
-                          
-                          if (isCorrect) {
-                            borderColor = "border-l-4 border-success-green";
-                            bgColor = "bg-navy-900";
-                            textColor = "text-success-green";
-                          } else if (isChosen) {
-                            borderColor = "border-l-4 border-alert-red";
-                            bgColor = "bg-navy-900";
-                            textColor = "text-alert-red";
-                          }
-                          
-                          return (
-                            <div
-                              key={opt.option_index}
-                              className={`text-sm px-4 py-2 rounded border ${borderColor} ${bgColor} ${textColor} font-semibold`}
-                            >
-                              <span className="mr-2 font-bold text-text-muted">{String.fromCharCode(65 + opt.option_index)})</span>
-                              {opt.option_text}
-                              {isChosen && !isCorrect && <span className="ml-2 text-xs">(sua resposta) ✕</span>}
-                              {isCorrect && <span className="ml-2 text-xs">(gabarito) ✓</span>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <TacticalButton variant="secondary" size="medium" className="w-full mt-3">
-                        Revisar
-                      </TacticalButton>
-                    </div>
-                  )}
-                </TacticalCard>
-              );
-            })}
-          </div>
+        {!loading && !error && (
+          <>
+            <section className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-graphite/40 bg-navy-900 p-4"><p className="text-2xl font-black text-text-primary">{payload.errors.length}</p><p className="text-xs text-text-secondary">Questões com erro</p></div>
+              <div className="rounded-2xl border border-alert-red/25 bg-alert-red/5 p-4"><p className="text-2xl font-black text-text-primary">{recurrent.length}</p><p className="text-xs text-text-secondary">Reincidentes</p></div>
+              <div className="hidden rounded-2xl border border-graphite/40 bg-navy-900 p-4 sm:block"><p className="text-2xl font-black text-text-primary">{payload.errors.reduce((sum, item) => sum + item.errorCount, 0)}</p><p className="text-xs text-text-secondary">Erros registrados</p></div>
+            </section>
+
+            {payload.setupRequired && <p className="mt-5 rounded-2xl border border-warning-gold/30 bg-warning-gold/5 p-4 text-sm text-text-secondary">O edital ainda não foi carregado. O sistema não fabricará um caderno de erros.</p>}
+
+            {recurrent.length > 0 && (
+              <section className="mt-7">
+                <h2 className="text-lg font-black text-text-primary">Prioridade alta: erros recorrentes</h2>
+                <div className="mt-3 space-y-3">
+                  {recurrent.slice(0, 6).map((item) => <ErrorCard key={`r-${item.questionId}`} item={item} />)}
+                </div>
+              </section>
+            )}
+
+            <section className="mt-7">
+              <h2 className="text-lg font-black text-text-primary">Histórico</h2>
+              <div className="mt-3 space-y-3">
+                {payload.errors.map((item) => <ErrorCard key={item.questionId} item={item} />)}
+                {payload.errors.length === 0 && <p className="rounded-2xl border border-graphite/40 bg-navy-900 p-5 text-sm text-text-secondary">Nenhum erro registrado para este filtro.</p>}
+              </div>
+            </section>
+          </>
         )}
-      </div>
+      </main>
     </div>
+  );
+}
+
+function ErrorCard({ item }: { item: ErrorEntry }) {
+  const label = item.origin === "REAL" ? "[QUESTÃO REAL]" : item.origin === "INEDITA" ? "[QUESTÃO INÉDITA]" : "[EXEMPLO DIDÁTICO]";
+  return (
+    <article className="rounded-2xl border border-graphite/40 bg-navy-900 p-4">
+      <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
+        <span className="rounded-full bg-gold-institution/10 px-2 py-1 text-gold-institution">{label}</span>
+        <span className="rounded-full bg-navy-800 px-2 py-1 text-text-secondary">{item.discipline}</span>
+        {item.errorCount > 1 && <span className="rounded-full bg-alert-red/10 px-2 py-1 text-alert-red">{item.errorCount} erros</span>}
+      </div>
+      {item.topic && <p className="mt-3 text-[11px] font-bold uppercase tracking-wider text-text-muted">{item.topic}</p>}
+      <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm font-semibold leading-relaxed text-text-primary">{item.statement}</p>
+      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+        <span className="rounded-lg bg-navy-800 px-2 py-1 text-text-secondary">Causa: {item.errorType ? ERROR_LABELS[item.errorType] ?? item.errorType : "não classificada"}</span>
+        {item.conceptGap && <span className="rounded-lg bg-warning-gold/5 px-2 py-1 text-warning-gold">Lacuna: {item.conceptGap}</span>}
+      </div>
+      <p className="mt-3 text-[11px] text-text-muted">Último erro: {new Intl.DateTimeFormat("pt-BR").format(new Date(item.lastErrorAt))}</p>
+    </article>
   );
 }

@@ -34,7 +34,7 @@ O Jest força encerramento e avisa sobre possível handle aberto. É dívida pre
 ## Banco e migrations V2
 
 - 20 arquivos SQL, versões locais únicas `001`–`020`: `014_answer_key_annulment.sql`, `015_prevent_annulled_real_questions.sql` e `016_simulation_current_edital_scope.sql` preservam a ordem remota informada.
-- Checksums completos: `docs/v3/baselines/v2-migrations.sha256.json`.
+- Checksums completos: `docs/v3/baselines/v2-migrations.sha256.json`. O hash usa texto canônico LF para produzir o mesmo resultado em checkouts Windows e Linux; a primeira execução remota revelou e documentou a divergência CRLF.
 - 22 tabelas públicas com `ENABLE ROW LEVEL SECURITY`: `answer_key_candidates`, `app_users`, `disciplines`, `error_notebook`, `exam_incidence`, `exams`, `question_attempts`, `question_candidates`, `question_sources`, `questions`, `review_schedule`, `simulation_questions`, `simulations`, `source_document_pages`, `source_documents`, `source_extractions`, `source_relationships`, `source_visual_assets`, `study_sessions`, `syllabus_candidates`, `syllabus_items`, `topic_progress`.
 - Tabelas privadas por proprietário: `question_attempts`, `error_notebook`, `topic_progress`, `review_schedule`, `study_sessions`, `simulations`; `simulation_questions` herda propriedade por `simulation_id`.
 - `app_users.access_key_hash` e todas as FKs V2 permanecem inalteradas.
@@ -121,3 +121,31 @@ O pgTAP fresh confirmou 22 tabelas, RLS, grants das cinco RPCs V2, pesos/distrib
 - Vermelhos: nenhum gate técnico local.
 
 Decisão reavaliada: **FASE 1 BLOQUEADA**. O bloqueio SQL foi eliminado, mas o contrato vigente exige todos os itens de [phase-1-entry-gate.md](./contracts/phase-1-entry-gate.md) verdes. Ainda faltam evidências operacionais/UX e a decisão de retenção; esta conclusão não inicia a Fase 1.
+
+## Fechamento complementar dos gates — 30/08/2026
+
+### Validação final local
+
+| Comando/verificação | Resultado |
+|---|---|
+| `npm ci` | exit 0; 684 pacotes, 0 vulnerabilidades; avisos transitivos depreciados mantidos como dívida |
+| `npm run lint` | exit 0; 0 erros e 1 warning V2 conhecido em `TopNav.tsx:46` |
+| `npm run test:ci` | exit 0; 10 suítes e 35/35 testes |
+| `npm run build` | exit 0; Next.js 16.3.0, 33 páginas estáticas e todas as rotas esperadas |
+| `npm run test:db:fresh` | exit 0; migrations `001`–`020` e 24/24 pgTAP |
+| `npm run test:db:upgrade` | exit 0; fixture V2 preservada, nenhuma migration pendente e 11/11 pgTAP |
+| `git diff --check` | registrado antes do commit/push final; sem erro de whitespace |
+
+O manifesto de migrations passou a calcular SHA-256 sobre texto canônico LF. Isso corrige a única falha do primeiro CI Linux sem alterar um byte lógico dos arquivos SQL.
+
+### Smoke mobile e comportamento V2
+
+A evidência completa está em [phase0-mobile-smoke.md](./baselines/phase0-mobile-smoke.md). As sete telas principais foram verificadas em 360, 390, 412, 768 e 1440 px sem overflow horizontal. Login, resposta de questão, revisão, caderno, desempenho, simulado/resultado, menu, scroll, reload, voltar/avançar e erro/recuperação de rede funcionaram.
+
+Foram preservadas como dívida: alvos essenciais de 36–42 px, ausência de padding de safe area e grants de tabela para `service_role` não reproduzidos pelas migrations fresh. O smoke precisou de grant somente no container local; nenhum SQL versionado ou remoto foi alterado.
+
+### Política de conta e operação
+
+- [ADR 008](../adr/008-v3-account-lifecycle-retention.md): invite-only, e-mail confirmado, reset pelo Supabase Auth, suspensão, exclusão privada após 30 dias, auditoria mínima anonimizada por 12 meses e nenhuma senha armazenada pela aplicação.
+- [backup-staging-plan.md](./contracts/backup-staging-plan.md): backup/restore, variáveis, barreiras contra produção e rollback definidos.
+- A sessão não possui credencial para identificar com segurança o project ref de produção, e não há evidência de staging Supabase separado nem restore drill. Esses fatos permanecem gates operacionais, não são preenchidos por suposição.

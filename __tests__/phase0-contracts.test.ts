@@ -32,8 +32,9 @@ describe("Fase 0: fronteira congelada da V2", () => {
     ]);
 
     for (const [file, expectedHash] of Object.entries(manifest.files)) {
+      const canonicalSql = readFileSync(path.join(migrationDirectory, file), "utf8").replace(/\r\n/g, "\n");
       const actualHash = createHash("sha256")
-        .update(readFileSync(path.join(migrationDirectory, file)))
+        .update(canonicalSql, "utf8")
         .digest("hex");
       expect(actualHash).toBe(expectedHash);
     }

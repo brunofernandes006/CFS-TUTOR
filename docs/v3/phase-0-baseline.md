@@ -149,3 +149,17 @@ Foram preservadas como dívida: alvos essenciais de 36–42 px, ausência de pad
 - [ADR 008](../adr/008-v3-account-lifecycle-retention.md): invite-only, e-mail confirmado, reset pelo Supabase Auth, suspensão, exclusão privada após 30 dias, auditoria mínima anonimizada por 12 meses e nenhuma senha armazenada pela aplicação.
 - [backup-staging-plan.md](./contracts/backup-staging-plan.md): backup/restore, variáveis, barreiras contra produção e rollback definidos.
 - A sessão não possui credencial para identificar com segurança o project ref de produção, e não há evidência de staging Supabase separado nem restore drill. Esses fatos permanecem gates operacionais, não são preenchidos por suposição.
+
+### CI remoto da `main`
+
+| Workflow | Run / job | Commit | Resultado |
+|---|---|---|---|
+| CFS Tutor CI | run `33349141365`, job `99358917450` | `f12dce2` | **FALHOU** em contratos: manifesto CRLF calculado no Windows divergiu do checkout LF no Linux; build foi corretamente bloqueado |
+| CFS Tutor CI | run `33351165709`, job `99364678673` | `ad1794d` | **SUCESSO** em 49 s: install, lint, 35 testes, contratos e build |
+| CFS Tutor database baseline (manual) | run `33351184089`, job `99364743713` | `ad1794d` | **SUCESSO** em 2 min 16 s: stack isolada, fresh, pgTAP, fixture upgrade, pgTAP upgrade e stop |
+
+O CI emitiu apenas dois avisos não mascarados: actions `checkout/setup-node@v4` ainda direcionadas a Node 20 e o warning V2 de `window.location.assign()`. Nenhum workflow acessou Supabase remoto ou fez deploy.
+
+### Decisão desta execução
+
+Gates verdes: CI principal, baseline de banco remoto, validação local, smoke documentado e ADR 008. Gates ainda pendentes: (1) project ref de produção conferido em runbook restrito; (2) staging Supabase separado com restore drill comprovado. Portanto, a decisão permanece **FASE 1 BLOQUEADA** e nenhuma atividade da Fase 1 foi iniciada.

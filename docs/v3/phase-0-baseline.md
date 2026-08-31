@@ -163,3 +163,19 @@ O CI emitiu apenas dois avisos não mascarados: actions `checkout/setup-node@v4`
 ### Decisão desta execução
 
 Gates verdes: CI principal, baseline de banco remoto, validação local, smoke documentado e ADR 008. Gates ainda pendentes: (1) project ref de produção conferido em runbook restrito; (2) staging Supabase separado com restore drill comprovado. Portanto, a decisão permanece **FASE 1 BLOQUEADA** e nenhuma atividade da Fase 1 foi iniciada.
+
+## Fechamento do Gate 4 — staging remoto
+
+- Alvo escrito: exclusivamente `CFS-TUTOR-STAGING`, project ID `rygcwnxbkftmrifejfbl`, região `ca-central-1`, status `ACTIVE_HEALTHY`.
+- Produção: identificada por leitura da assinatura de 20 migrations, com ref mascarado `mcsy…fgzl`; nenhuma escrita, link, repair ou deploy.
+- Migrations staging: 20/20 aplicadas separadamente, de `001` a `020`, preservando `014` → `015` → `016`.
+- Restore: fixture sintética V2 aplicada em transação.
+- pgTAP: 24/24 schema/grants/RLS e 11/11 preservação da fixture.
+- Integridade: 22/22 tabelas públicas com RLS, zero attempts órfãos, zero itens de simulado órfãos e uma questão real com prova/fontes rastreáveis.
+- Contagens: 3 disciplinas, 1 proprietário, 2 fontes e um registro para cada agregado sintético esperado.
+- Rollback: exclusão de cabeçalho/item de simulado dentro de subtransação produziu `2 → 0`; exceção controlada reverteu para `2`, com `rollback_ok=true`.
+- Advisors: somente `INFO` esperado da V2 (RLS sem policy de cliente e índices sem uso na fixture mínima); nada foi alterado para mascarar esses sinais.
+
+O ensaio demonstra restauração e rollback no ambiente segregado. A fixture não substitui o backup contemporâneo obrigatório antes de cada migration funcional. Todos os gates objetivos da Fase 0 estão verdes; nenhuma atividade da Fase 1 foi iniciada.
+
+Decisão: **FASE 1 LIBERÁVEL** mediante autorização nova e explícita.

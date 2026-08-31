@@ -1,6 +1,6 @@
 # Plano de backup, restauração e staging da V3
 
-Status em 30/08/2026: contrato definido; comprovações operacionais indicadas abaixo.
+Status em 30/08/2026: contrato e ensaio operacional de staging concluídos; nenhuma escrita em produção.
 
 ## Inventário observado sem alterar produção
 
@@ -8,20 +8,39 @@ Status em 30/08/2026: contrato definido; comprovações operacionais indicadas a
 |---|---|---|
 | repositório | `brunofernandes006/CFS-TUTOR`, branch `main` | identificado |
 | ambientes GitHub | `Preview` e `Production` existem | identificado por leitura |
-| projeto Supabase de produção | o projeto existe operacionalmente, mas seu `project ref`, organização e região não estão versionados nem disponíveis na sessão | **não comprovado** |
+| projeto Supabase de produção | identificado por leitura e pela assinatura exata das 20 migrations V2; ref mascarado `mcsy…fgzl`, região `ca-central-1`, `ACTIVE_HEALTHY` | identificado; ref completo permanece no runbook restrito |
 | vínculo local | não há `.env.local`, `.vercel/project.json` nem projeto Supabase ligado no workspace | segregado |
-| credencial CLI | `supabase projects list` falhou por ausência de access token; não foi feito login | segregado |
-| staging Supabase separado | nenhuma evidência acessível de projeto/branch persistente | **não comprovado** |
+| acesso operacional | connector Supabase autenticado e sempre chamado com `project_id` explícito | segregado por alvo |
+| staging Supabase separado | `CFS-TUTOR-STAGING`, `rygcwnxbkftmrifejfbl`, `ca-central-1`, PostgreSQL 17.6, `ACTIVE_HEALTHY` | comprovado |
 
-O identificador de produção deve ser registrado em runbook operacional de acesso restrito, nunca neste documento público. A ausência de credencial nesta Fase 0 é deliberada e impede que testes atinjam produção.
+O identificador completo de produção permanece no runbook operacional de acesso restrito. A conferência foi somente leitura; migrations, fixture, pgTAP e rollback foram direcionados exclusivamente ao project ID de staging.
+
+## Ensaio executado no staging
+
+| Etapa | Evidência | Resultado |
+|---|---|---|
+| preflight | nome/ref/região/status conferidos; zero migrations e zero tabelas públicas | aprovado |
+| migrations | 20 entradas separadas, de `001_source_ingestion` a `020_personal_access_gate` | aprovado |
+| ordem reconciliada | `014_answer_key_annulment` → `015_prevent_annulled_real_questions` → `016_simulation_current_edital_scope` | aprovado |
+| restore sintético | `supabase/fixtures/v2_upgrade_fixture.sql` aplicado em transação | aprovado |
+| pgTAP schema | `phase0_schema_baseline_test.sql`, último TAP `ok 24` | 24/24 aprovado |
+| pgTAP upgrade | `phase0_upgrade_fixture_test.sql`, último TAP `ok 11` | 11/11 aprovado |
+| integridade | 22 tabelas públicas, 22 com RLS, 1 questão real rastreável, 0 attempts órfãos e 0 itens de simulado órfãos | aprovado |
+| rollback | simulado sintético: 2 registros antes, 0 durante exclusão e 2 depois do rollback | aprovado |
+
+Contagens após restore: 3 disciplinas; 1 proprietário; 2 fontes; e 1 registro em relacionamento de fontes, item do edital, prova, questão, vínculo de fonte, tentativa, caderno de erros, progresso, revisão, simulado e item de simulado. `access_key_hash` permaneceu no valor sintético esperado.
+
+O primeiro diagnóstico amplo também restaurou corretamente 13 registros (`13 → 0 → 13`), mas sua flag esperava por engano 12. O ensaio foi corrigido para usar contagem derivada e repetido com sucesso; nenhuma perda persistiu.
+
+Advisors pós-restore retornaram apenas informações esperadas da V2: 22 tabelas com RLS fechado e sem policies de cliente, e índices ainda não utilizados em uma fixture mínima. Não houve mudança para silenciar os avisos.
 
 ## Requisito anterior à primeira migration funcional
 
 Antes de executar qualquer migration da Fase 1, devem existir e ser comprovados:
 
-1. `PRODUCTION_PROJECT_ID` registrado no runbook restrito e conferido por duas pessoas/duas fontes;
+1. `PRODUCTION_PROJECT_ID` registrado no runbook restrito e conferido contra o inventário e a assinatura de migrations;
 2. projeto Supabase de staging separado, com `STAGING_PROJECT_ID`, URL e chaves próprias;
-3. backup recuperável de produção e restore drill concluído em ambiente não produtivo;
+3. estratégia de backup de produção aprovada e restore drill concluído em ambiente não produtivo; a captura imediatamente anterior a cada migration funcional continua obrigatória;
 4. inventário separado de objetos de Storage, configurações de Auth, Edge Functions, secrets e integrações;
 5. aprovação explícita do operador para o alvo staging.
 
@@ -40,7 +59,7 @@ Esses valores não entram no Git, logs, artefatos de CI ou jobs de pull request.
 3. Produzir dumps lógicos de roles, schema e dados por ferramenta oficial, criptografar fora do workspace e registrar SHA-256/tamanho sem publicar o conteúdo.
 4. Inventariar e copiar separadamente objetos de Storage: backup de banco não contém os objetos.
 5. Exportar inventário reproduzível de Auth/configuração, Functions, secrets e integrações sem revelar valores.
-6. Restaurar em staging descartável, aplicar reconciliação, comparar contagens/invariantes e executar fresh/upgrade/pgTAP e smoke antes de declarar o backup recuperável.
+6. Restaurar em staging, aplicar reconciliação, comparar contagens/invariantes e executar fresh/upgrade/pgTAP antes de declarar o artefato recuperável. O ensaio sintético da Fase 0 comprovou o procedimento; cada migration funcional ainda exige uma captura nova de produção.
 
 Referências operacionais: [Supabase — Managing environments](https://supabase.com/docs/guides/deployment/managing-environments), [Database backups](https://supabase.com/docs/guides/platform/backups) e [Restore to a new project](https://supabase.com/docs/guides/platform/migrating-within-supabase/restore-to-new-project).
 
@@ -67,4 +86,4 @@ A Fase 1 deve seguir expand/contract: manter fluxo V2, flags novas desligadas po
 
 ## Critério do gate
 
-Este plano fecha a definição documental. O gate operacional permanece pendente até que o project ref de produção esteja conferido em runbook restrito, staging separado exista e um restore drill seja evidenciado. Isso é requisito obrigatório antes da primeira migration funcional.
+O Gate 4 da Fase 0 está fechado: produção foi identificada sem escrita; staging separado foi comprovado; migrations/fixture/pgTAP/integridade foram validados; rollback transacional foi ensaiado. Antes de cada migration funcional permanece obrigatório gerar e validar uma captura de produção contemporânea, sem reutilizar a fixture como substituto de backup real.

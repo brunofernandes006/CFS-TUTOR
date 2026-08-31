@@ -17,7 +17,9 @@ A decisão é binária. Fase 1 só é liberável quando todos os itens estiverem
 | smoke mobile V2 registrado | `baselines/phase0-mobile-smoke.md` | VERDE: cinco viewports, fluxos e dívidas registrados |
 | política de convite e retenção aprovada | ADR 008 | VERDE: invite-only e ciclo completo formalizados |
 | plano de backup/staging | `contracts/backup-staging-plan.md` | VERDE documental |
-| projeto de produção identificado em runbook restrito | conferência operacional sem publicar ref | PENDENTE: credencial/project ref indisponíveis nesta sessão |
-| staging Supabase separado e restore drill | evidência operacional antes de migration funcional | PENDENTE: ambiente não comprovado |
+| projeto de produção identificado em runbook restrito | ref mascarado + assinatura das 20 migrations; leitura somente | VERDE: projeto `ACTIVE_HEALTHY`, sem escrita |
+| staging Supabase separado e restore drill | `CFS-TUTOR-STAGING` / `rygcwnxbkftmrifejfbl`; `backup-staging-plan.md` | VERDE: 20 migrations, fixture, 35 pgTAP, integridade e rollback `2→0→2` |
 
 Enquanto houver `VERMELHO` ou `PENDENTE`, a decisão obrigatória é `FASE 1 BLOQUEADA`.
+
+Em 30/08/2026, todos os itens desta matriz estão `VERDE`. A Fase 1 é liberável somente mediante nova autorização explícita; este gate não a inicia.

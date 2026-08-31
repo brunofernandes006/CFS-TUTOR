@@ -1,0 +1,21 @@
+# Gate objetivo de entrada da Fase 1
+
+A decisão é binária. Fase 1 só é liberável quando todos os itens estiverem `VERDE` e houver autorização nova e explícita do usuário.
+
+| Gate | Evidência | Estado em 30/08/2026 |
+|---|---|---|
+| ADRs 001–007 aceitos | cabeçalhos em `docs/adr/` | VERDE |
+| invariantes e mapa auth versionados | contratos e testes Phase 0 | VERDE |
+| checksums das 20 migrations registrados | manifesto SHA-256; `014`/`015` reconciliados sem alterar SQL | VERDE |
+| lint/test/build anterior e posterior verdes | `phase-0-baseline.md` | VERDE |
+| harness fresh aplica migrations reais | `npm run test:db:fresh` | VERDE: 20 migrations e 24/24 pgTAP |
+| harness upgrade preserva fixture V2 | `npm run test:db:upgrade` | VERDE: 11/11 pgTAP e histórico preservado |
+| pgTAP de schema/grants/RLS verde | `supabase/tests/database/**` | VERDE: 35/35 testes nos dois caminhos |
+| CI do repositório verde com contratos | workflow `ci.yml` | PENDENTE: execução local verde; workflow remoto não disparado |
+| harness SQL reproduzível em CI | workflow manual `database-baseline.yml` | VERDE localmente; workflow usa os mesmos comandos aprovados |
+| ambiente local sem segredo/ligação remota | `supabase/config.toml`, `.env.local` ausente | VERDE |
+| smoke mobile V2 registrado | matriz de viewports da Fase 0 | PENDENTE |
+| política de convite e retenção aprovada | decisão de produto da Fase 1 | PENDENTE |
+| backup/staging identificados | registro operacional sem tocar produção | PENDENTE |
+
+Enquanto houver `VERMELHO` ou `PENDENTE`, a decisão obrigatória é `FASE 1 BLOQUEADA`.

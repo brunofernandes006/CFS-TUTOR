@@ -1,0 +1,52 @@
+# Local-only harness for Phase 0. It is intentionally not linked to any remote project.
+project_id = "cfs-tutor-v3-local"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+auto_expose_new_tables = false
+
+[db]
+port = 54322
+shadow_port = 54320
+health_timeout = "2m"
+major_version = 17
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+[db.seed]
+enabled = false
+sql_paths = []
+
+[studio]
+enabled = false
+
+[local_smtp]
+enabled = false
+
+[auth]
+enabled = false
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = []
+enable_signup = false
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[realtime]
+enabled = false
+
+[analytics]
+enabled = false
+port = 54327
+
+[edge_runtime]
+enabled = false

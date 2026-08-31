@@ -18,7 +18,7 @@ PWA mobile-first de estudo estratégico para o CFS/Sargento PMESP.
 ## Desenvolvimento
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -29,6 +29,8 @@ npm run lint
 npm run test:ci
 npm run build
 ```
+
+O baseline e os contratos da Fase 0 da V3 estão em [`docs/v3/phase-0-baseline.md`](docs/v3/phase-0-baseline.md). Todas as flags V3 permanecem desligadas e sem efeito sobre a V2.
 
 ## Variáveis de servidor
 

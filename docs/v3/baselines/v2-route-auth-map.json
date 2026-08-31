@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "defaultMode": "DENY",
+  "routes": {
+    "POST /api/auth/login": "PUBLIC",
+    "POST /api/auth/logout": "LEGACY_OWNER",
+    "POST /api/attempts": "LEGACY_OWNER",
+    "GET /api/error-notebook": "LEGACY_OWNER",
+    "POST /api/errors/classify": "LEGACY_OWNER",
+    "GET /api/exams": "LEGACY_OWNER",
+    "GET /api/home": "LEGACY_OWNER",
+    "GET /api/mission": "LEGACY_OWNER",
+    "GET /api/performance": "LEGACY_OWNER",
+    "GET /api/questions": "LEGACY_OWNER",
+    "GET /api/reviews": "LEGACY_OWNER",
+    "GET /api/simulations": "LEGACY_OWNER",
+    "POST /api/simulations": "LEGACY_OWNER",
+    "GET /api/simulations/[id]": "LEGACY_OWNER",
+    "POST /api/simulations/[id]/answer": "LEGACY_OWNER",
+    "POST /api/simulations/[id]/finish": "LEGACY_OWNER",
+    "GET /api/sources": "LEGACY_OWNER",
+    "PATCH /api/sources/[sha256]": "LEGACY_OWNER",
+    "GET /api/sources/candidates": "LEGACY_OWNER",
+    "POST /api/sources/candidates/promote": "LEGACY_OWNER",
+    "GET /api/sources/edital": "LEGACY_OWNER",
+    "POST /api/sources/edital": "LEGACY_OWNER",
+    "PATCH /api/sources/edital": "LEGACY_OWNER",
+    "POST /api/sources/pair": "LEGACY_OWNER",
+    "POST /api/sources/parse": "LEGACY_OWNER",
+    "POST /api/sources/upload": "LEGACY_OWNER",
+    "GET /api/syllabus": "LEGACY_OWNER"
+  }
+}

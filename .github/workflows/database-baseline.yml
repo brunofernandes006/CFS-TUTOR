@@ -1,0 +1,39 @@
+name: CFS Tutor database baseline (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DO_NOT_TRACK: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start isolated local Supabase
+        run: npm run db:start
+
+      - name: Fresh database baseline
+        run: npm run test:db:fresh
+
+      - name: V2 upgrade fixture baseline
+        run: npm run test:db:upgrade
+
+      - name: Stop isolated local Supabase
+        if: always()
+        run: npm run db:stop || true

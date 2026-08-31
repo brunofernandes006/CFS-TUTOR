@@ -29,6 +29,9 @@ jobs:
       - name: Tests
         run: npm run test:ci
 
+      - name: V2/V3 phase boundary contracts
+        run: npm run test:phase0
+
       - name: Build
         run: npm run build
         env:

@@ -18,7 +18,9 @@ Cada migration abaixo é apenas prevista. Quando a fase for autorizada, o arquiv
 
 **Rollback:** remover somente flags/telemetria preparatória não usada; documentação permanece como histórico.
 
-**Critério de aceite:** ADRs 001–006 aprovados; suíte V2 verde; harness SQL/CI executável; mapa `rota/método → auth_mode` e matrizes grants/RLS aprovados; inventário/checksums de migrations (inclusive prefixos 014) registrado; zero alteração funcional/banco.
+**Critério de aceite:** ADRs 001–006 aprovados; suíte V2 verde; harness SQL/CI executável; mapa `rota/método → auth_mode` e matrizes grants/RLS aprovados; inventário/checksums de migrations (inclusive a reconciliação local `014` → `015`) registrado; zero alteração funcional/banco.
+
+**Registro da execução:** a autorização de 30/08/2026 está registrada em [phase-0-baseline.md](./phase-0-baseline.md). O gate objetivo está em [contracts/phase-1-entry-gate.md](./contracts/phase-1-entry-gate.md) e inclui o ADR 007. Este registro não autoriza a Fase 1.
 
 ## Fase 1 — fundação de Supabase Auth e perfis
 

@@ -26,6 +26,7 @@
 
 # debug
 npm-debug.log*
+.npm-cache/
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
@@ -62,6 +63,10 @@ next-env.d.ts
 
 # OpenNext
 .open-next
+
+# Supabase CLI local state
+/supabase/.temp/
+/supabase/.branches/
 
 # wrangler files
 .wrangler

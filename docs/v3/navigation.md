@@ -13,7 +13,7 @@
 ```text
 Público
 ├── /login
-├── /cadastro
+├── /cadastro              somente convite/aprovação no primeiro corte
 ├── /recuperar-senha
 ├── /atualizar-senha
 └── /auth/confirmar
@@ -70,6 +70,12 @@ Barra inferior do aluno:
 “Mais” abre bottom sheet ou drawer com Revisão, Erros, Simulados, Provas anteriores, Favoritos, Cadernos, Metas, Conquistas e Perfil. Badge pode indicar revisões vencidas; nunca usar múltiplos badges competitivos.
 
 No desktop, as quatro áreas aparecem no topo; “Mais” vira menu. Admin usa sidebar própria e nunca ocupa a barra mobile do aluno.
+
+## Coexistência V2/V3 sem colisão de rotas
+
+Durante o piloto, toda UI/API V3 vive em `/v3/**` e possui `auth_mode = AUTH_V3`; as URLs atuais permanecem `LEGACY_OWNER`. Route groups organizam arquivos, mas não são usados para criar duas páginas no mesmo pathname. No cutover, uma única implementação assume cada URL final e redirects preservam deep links. Não existe fallback por request entre Auth e cookie legado.
+
+Manifesto, `start_url`, links e service worker são atualizados somente no cutover. O rollback do piloto remove o prefixo/flag V3 sem tentar selecionar entre dois `page.tsx` concorrentes.
 
 ## Fluxos
 
@@ -141,4 +147,3 @@ Voltar do detalhe da fonte, favorito ou caderno preserva questão, scroll e sele
 - zoom 200%, teclado virtual, safe area e movimento reduzido;
 - atalho “pular para conteúdo” e headings hierárquicos;
 - confirmação explícita antes de abandonar sessão com rascunho.
-

@@ -14,6 +14,14 @@ Documentos complementares:
 - [UX e performance](./ux-performance.md)
 - [Plano de migração](./migration-plan.md)
 - [Roadmap](./implementation-roadmap.md)
+- [ADR 001 — identidade e cutover](../adr/001-v3-identity-and-auth-cutover.md)
+- [ADR 002 — autorização e RPCs](../adr/002-v3-database-authorization-and-rpcs.md)
+- [ADR 003 — sigilo do gabarito](../adr/003-v3-question-answer-secrecy.md)
+- [ADR 004 — cache e estado local](../adr/004-v3-cache-and-local-state.md)
+- [ADR 005 — versionamento](../adr/005-v3-curriculum-question-versioning.md)
+- [ADR 006 — consistência pedagógica](../adr/006-v3-attempt-review-simulation-consistency.md)
+
+Os ADRs acima são normativos. Expressões anteriores como “diretamente ou”, “nova ou absorvida” e “atômico ou outbox” deixam de representar alternativas abertas quando um ADR fixa a decisão.
 
 ## Visão do produto
 
@@ -65,13 +73,13 @@ Browser / PWA
 ├── Client Islands: filtros, resolução, timers e otimistic UI
 ├── URL state: consultas e navegação reproduzível
 ├── memória: cache curto e prefetch
-└── armazenamento local: preferências e checkpoints mínimos
+└── armazenamento local: allowlist de IDs/posição, isolada por authUserId
           │ cookies SSR / PKCE
           ▼
 Next.js App Router — Node.js runtime
 ├── layouts e guardas por grupo de rota
 ├── Server Actions para mutações internas simples
-├── Route Handlers para streaming, upload, webhooks e contratos HTTP
+├── Route Handlers para Auth, upload, webhooks e comandos idempotentes de sessão
 ├── serviços de domínio sem dependência de UI
 └── admin BFF com autorização explícita
           ▼
@@ -79,7 +87,8 @@ Supabase
 ├── Auth: email + senha, confirmação e recuperação
 ├── PostgreSQL: conteúdo global + dados por usuário
 ├── RLS e grants por operação
-├── RPCs atômicas e idempotentes
+├── schema API seguro sem gabarito + schema privado de correção
+├── RPCs atômicas/idempotentes derivando auth.uid()
 └── Storage privado com políticas próprias
 ```
 
@@ -87,7 +96,7 @@ Supabase
 
 - Server Components fazem leituras iniciais diretamente pela camada servidor, evitando browser → API → banco quando não há necessidade de contrato HTTP.
 - Client Components ficam restritos à interação contínua: seleção, filtros, mapa de questões, timer, rascunho e feedback.
-- Server Actions são preferidas para mutações internas de formulário. Route Handlers permanecem para uploads, callbacks de Auth, integração PWA e operações que precisam de semântica HTTP estável.
+- Server Actions são preferidas para formulários internos simples. Submissão de questão, checkpoint, resposta/finalização de simulado, uploads, callbacks de Auth e operações com idempotência/retry usam Route Handlers versionados e RPCs de domínio; isso mantém contrato HTTP estável para a PWA.
 - Runtime Node.js é o padrão. Nenhum módulo é movido para Edge sem requisito e teste de compatibilidade.
 - DTOs entre Server e Client são objetos serializáveis; datas cruzam a fronteira como strings ISO.
 
@@ -111,22 +120,40 @@ Supabase
 
 ## Segurança e acesso
 
-- `auth.users.id` é a identidade canônica; `public.profiles.id` referencia esse UUID.
-- Tabelas privadas do aluno usam `user_id` e políticas com `(select auth.uid()) = user_id` para cada operação necessária.
+- `auth.users.id` é a identidade canônica após o cutover; durante expand/contract, `app_users` é somente ponte de domínio conforme ADR 001.
+- Cada rota é `PUBLIC`, `LEGACY_OWNER` ou `AUTH_V3`; nenhuma rota aceita simultaneamente cookie legado e sessão Auth como autoridade.
+- Tabelas privadas novas usam `user_id → auth.users.id`; tabelas V2 usam a ponte auditável até a contração. Policies verificam sessão não nula e owner para cada operação.
 - `TO authenticated` nunca é usado sozinho como autorização de linhas privadas.
-- Conteúdo publicado é legível por autenticados; escrita de conteúdo não é concedida ao cliente.
+- Conteúdo publicado é legível por autenticados somente por projeções/views seguras. A role do aluno não lê tabelas editoriais nem relações que contenham gabarito, explicação pós-resposta ou fonte bruta.
 - Administração passa por backend autorizado. Papel não depende de `user_metadata`; a fonte canônica fica em tabela privada administrada pelo servidor.
-- `service_role` nunca chega ao browser e não é usado como atalho para operações comuns do aluno.
+- Há clientes separados `user-scoped` e `admin`; `service_role` nunca chega ao browser, não é usado em operação comum e sua importação em fluxo de aluno falha em teste de arquitetura.
 - Views expostas usam `security_invoker` ou ficam em schema não exposto.
-- Funções privilegiadas são mínimas, fora do schema exposto quando possível, com `EXECUTE` revogado de `PUBLIC` e verificação explícita de identidade.
+- Funções privilegiadas ficam em schema não exposto, usam `search_path = ''`, nomes qualificados, `EXECUTE` revogado de `PUBLIC`/`anon`, `auth.uid()` não nulo e verificação de propriedade. RPC de aluno nunca aceita `p_user_id`.
 - Grants e políticas RLS são entregues e testados juntos.
+
+### Fronteira de gabarito
+
+- `question_versions` contém somente o material apresentável; correção fica em `private.question_answer_versions`.
+- O browser recebe apenas `PublicQuestionDTO`; prefetch usa o mesmo DTO.
+- Correção é feita pela submissão autenticada/idempotente e devolve `QuestionFeedbackDTO` somente quando a política da sessão permite.
+- Simulado em andamento nunca recebe resposta, explicação ou resultado; esses dados só são liberados após finalização única.
 
 ## PWA e cache
 
 - Rotas autenticadas permanecem dinâmicas e não usam ISR compartilhado.
-- Service worker não armazena HTML autenticado, respostas de API, fontes privadas ou conteúdo sensível.
+- `use cache` compartilhado só pode envolver função pura de catálogo global e nunca captura cookies, sessão ou cliente RLS. `React.cache` é permitido para deduplicação no request.
+- Service worker usa allowlist de paths estáticos e não armazena HTML autenticado, API, Auth, URLs assinadas, assets de questão/fonte ou conteúdo sensível.
 - Cache persistente é permitido somente para shell, assets públicos versionados e, numa fase futura, pacotes de estudo explicitamente baixados e criptograficamente escopados ao usuário.
-- Cache em memória pode revalidar leituras por usuário; chaves sempre incluem `userId`, escopo, versão do edital e filtros.
+- Cache em memória privado inclui `authUserId`, versão do schema, escopo, versão do edital e filtros e é destruído no logout/troca de usuário.
+- Persistência local inicial contém apenas IDs, posição, índice de alternativa não confirmada, filtros não sensíveis e versão; nunca tokens, conteúdo, gabarito, explicação, notas ou payload de API.
+
+## Dados, consistência e escala
+
+- `syllabus_items` é conceito estável; `syllabus_version_items` define participação em cada edital. Sessão/simulado fixa a versão ao nascer.
+- Edição de questão gera versão; rows históricas recebem versão-baseline por backfill idempotente e não são recalculadas pela versão atual.
+- Tentativa, progresso, revisão e caderno de erros formam o núcleo transacional. A mesma transação grava evento outbox; XP, metas e agregados são projeções reconstruíveis.
+- `ReviewPolicyV3` versionada é a fonte canônica para 24h/7d/30d/60d e preserva gates de evidência da V2.
+- Listas grandes usam cursor estável; joins e agregações são resolvidos no banco. Nenhuma API baixa catálogos completos ou limita silenciosamente o histórico a 5.000 linhas.
 
 ## Painel administrativo
 
@@ -150,6 +177,7 @@ Administração não altera progresso individual, salvo operação de suporte au
 - Para sessão SSR em Next.js, adotar pacote suportado para cookies, com versão fixada e lockfile; validar a API na implementação porque a camada SSR ainda pode mudar.
 - Verificar exposição da Data API e grants explicitamente: novas tabelas podem não ser expostas automaticamente.
 - Rotas que leem ou renovam sessão são dinâmicas e não podem produzir cache compartilhado com `Set-Cookie`.
+- O piloto V3 usa `/v3/**`; route groups não duplicam a URL das páginas V2. O cutover troca uma única implementação por URL.
+- Signup inicial é por convite/aprovação administrativa; autenticação não equivale automaticamente a conta ativa.
 
 Referências oficiais consultadas em 30/08/2026: [Supabase Auth](https://supabase.com/docs/guides/auth), [escolha de pacote server-side](https://supabase.com/docs/guides/auth/choosing-a-server-package), [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [autenticação por senha](https://supabase.com/docs/guides/auth/passwords) e [changelog](https://supabase.com/changelog?types=breaking-change).
-

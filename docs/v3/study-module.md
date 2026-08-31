@@ -11,7 +11,7 @@ Um item do edital pode ter zero ou mais unidades de conteúdo. Cada unidade cont
 - título próprio e objetivo de aprendizagem;
 - corpo estruturado em blocos autorais do CFS;
 - natureza: oficial, explicativa ou complementar;
-- vínculo ao item e versão do edital;
+- vínculo ao conceito estável `syllabus_item` e à associação `syllabus_version_item` vigente;
 - uma ou mais fontes;
 - referência de página, artigo, seção ou intervalo quando aplicável;
 - status editorial: rascunho, em revisão, publicado, arquivado;
@@ -122,6 +122,8 @@ Registrar eventos e agregados separados:
 
 Eventos são append-only quando possível; agregados podem ser recalculados.
 
+Uma nova versão do edital não clona progresso. O conceito do item permanece estável e a elegibilidade por edital é registrada em `syllabus_version_items`. Sessões fixam a versão usada ao iniciar; publicação posterior não muda retroativamente conteúdo, questões ou métricas daquela sessão.
+
 ## Admin de conteúdo
 
 O editor administrativo precisa:
@@ -141,6 +143,5 @@ O editor administrativo precisa:
 - reload e troca de dispositivo retomam o último checkpoint confirmado;
 - recuperação ocorre antes da resposta/síntese quando configurada;
 - questões relacionadas respeitam edital e rastreabilidade;
-- conclusão atualiza progresso, revisão, meta e XP atomicamente ou por eventos idempotentes;
+- conclusão atualiza o núcleo pedagógico e grava outbox atomicamente; meta e XP são projeções idempotentes que não fazem a conclusão falhar;
 - o aluno distingue claramente leitura, prática e domínio.
-

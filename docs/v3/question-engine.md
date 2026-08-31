@@ -16,6 +16,8 @@ Oferecer treino, recuperação, provas anteriores e simulados com filtros avanç
 | simulado oficial | distribuição vigente | somente ao finalizar | sim |
 | simulado adaptativo | lacunas individuais | somente ao finalizar ou por configuração | sim |
 
+Na V3 inicial, todo modo de simulado retém feedback até finalizar. Uma mudança futura de modo exige novo contrato e não pode reutilizar payload de treino.
+
 ## Filtros avançados
 
 ### Essenciais
@@ -75,10 +77,43 @@ READY → SELECTED → SUBMITTING → CONFIRMED → FEEDBACK
 ```
 
 - Selecionar alternativa é otimista e local.
-- Confirmar gera comando idempotente.
-- Correção, tentativa, progresso, revisão, erro, meta e XP são processados de forma atômica ou por eventos idempotentes.
+- Confirmar gera comando HTTP/RPC idempotente, sem `user_id` no payload.
+- Tentativa, progresso, revisão e erro são processados atomicamente; a mesma transação grava outbox. Meta/XP/desempenho são projeções idempotentes e não bloqueiam a tentativa.
 - Feedback só aparece após confirmação do servidor.
 - Erro pede classificação causal rápida, editável depois.
+
+## Fronteira de dados e gabarito
+
+O browser nunca consulta a tabela base de correção. `question_versions` contém apenas apresentação; `private.question_answer_versions` contém gabarito/explicação e não tem grants para `anon`/`authenticated`.
+
+### `PublicQuestionDTO`
+
+```text
+sessionItemId, questionId, questionVersionId, position,
+discipline, syllabusItem, originLabel, examCitation,
+contextText, statement, options, authorizedAssets,
+requiresVisual, annulmentPolicy, canSubmit, userItemState
+```
+
+São proibidos no DTO, inclusive sob nomes derivados: `correct_answer`, `correctOptionIndex`, gabarito, explicação pós-resposta, rubrica, hash ou score que revele a alternativa. Prefetch e primeira leitura usam exatamente esse contrato.
+
+### Submissão
+
+`POST /api/v3/question-sessions/{sessionId}/items/{itemId}/submit`
+
+Entrada: `chosenOptionIndex`, UUID `idempotencyKey` e `expectedSessionVersion`. O servidor deriva `auth.uid()`, verifica que a sessão/item pertencem ao ator, valida opção contra as opções daquela versão e chama a RPC atômica. Cliente não envia `questionId`, versão ou owner livres como autoridade.
+
+Para treino/revisão, sucesso retorna `QuestionFeedbackDTO` com attempt, outcome, resposta correta e explicação **somente depois** da submissão válida. Retry idêntico retorna o mesmo DTO; mesma chave com payload diferente retorna `409`. Ausência de sessão retorna `401`; recurso alheio retorna `404` sem confirmar existência.
+
+### Questão anulada
+
+- não possui alternativa correta;
+- em prova histórica é apresentada com rótulo explícito;
+- submissão retorna `outcome = ANNULLED`, sem revelar resposta fabricada;
+- não altera domínio, revisão, caderno de erros ou XP de correção;
+- não entra no treino/simulado oficial corrente salvo regra histórica explícita.
+
+Views expostas são `security_invoker` e não fazem join com a tabela privada de resposta. `anon` não recebe grants. Testes tentam leitura direta por REST/GraphQL/view/RPC, inspecionam prefetch, erros e logs. Contrato normativo: [ADR 003](../adr/003-v3-question-answer-secrecy.md).
 
 ## Ferramentas durante a resolução
 
@@ -123,6 +158,10 @@ Combina domínio, erros, revisão, incidência confiável e cobertura. Quantidad
 - nenhuma correção durante modo prova;
 - resultado por disciplina/item e fila de recuperação.
 
+Ao criar, o simulado fixa `syllabus_version_id`, seed e `question_version_id` de cada item. Enquanto `IN_PROGRESS`, inclusive após salvar uma resposta, nenhum DTO contém acerto, alternativa correta ou explicação. Resposta confirmada é imutável; se um modo permitir troca, ela exige comando explícito versionado antes de avançar. Finalização usa lock/estado esperado, é executada uma vez e libera `SimulationResultDTO` somente ao proprietário.
+
+Cada item finalizado gera no máximo um `question_attempt` com `context = SIMULATION` e ligação única. O simulado oficial influencia desempenho e fila de recuperação pela mesma `ReviewPolicyV3`, sem dupla contagem. Attempts anulados/inválidos não alimentam domínio/erro.
+
 ## Favoritos e cadernos
 
 - Favorito é relação única usuário–alvo e pode apontar para questão ou conteúdo.
@@ -137,4 +176,16 @@ Combina domínio, erros, revisão, incidência confiável e cobertura. Quantidad
 - métricas ignoram tentativas inválidas, anuladas ou de conteúdo não elegível conforme regra documentada;
 - reportes podem suspender uma questão de novas sessões sem apagar histórico;
 - toda mutação usa `auth.uid()` derivado da sessão.
+- nenhuma RPC de aluno aceita `p_user_id`; propriedade é verificada na mesma transação;
+- `idempotency_key` é única por usuário/contexto e o payload é associado por hash;
+- `ReviewPolicyV3` versionada é a única fonte para 24h/7d/30d/60d e preserva evidência insuficiente em 24h;
+- caderno de erros é atualizado idempotentemente apenas por erro elegível; causa permanece editável e auditada;
+- facts históricos usam `question_version_id` e gabarito capturado, nunca a versão corrente.
 
+## Consultas, paginação e N+1
+
+- criação de sessão seleciona o pool no banco, com filtros/eligibilidade aplicados antes do limite; não transfere 2.000 questões para sorteio em memória;
+- listas e históricos usam cursor opaco estável (`sort_value,id`), padrão 25 e máximo 100; offset fica restrito a catálogos pequenos e estáticos;
+- erro, revisão, fonte pública e item são enriquecidos por query/view batch, sem fetch por linha nem download do catálogo inteiro;
+- contagens são endpoints/agregações próprias e nunca inferidas de página truncada;
+- toda query crítica tem índice, orçamento, fixture representativa e `EXPLAIN (ANALYZE, BUFFERS)` no staging.

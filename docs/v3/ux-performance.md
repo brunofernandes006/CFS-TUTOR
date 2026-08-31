@@ -30,6 +30,7 @@ A V3 adota resultados funcionais observados na referência — continuidade, fee
 - respeitar `saveData`, rede lenta e bateria quando disponível;
 - não pré-carregar gabarito/feedback antes da tentativa;
 - não inserir conteúdo autenticado no cache compartilhado do service worker.
+- prefetch de questão usa somente `PublicQuestionDTO`; nunca tabela/view administrativa ou resposta pós-correção.
 
 ## Optimistic UI
 
@@ -59,26 +60,31 @@ Estados visuais: `idle`, `optimistic`, `syncing`, `confirmed`, `retryable_error`
 |---|---|---|
 | URL | filtros, período, ordenação, cursor | validado e não sensível |
 | React/memória | dados lidos, seleção, UI aberta | escopado ao usuário e rota |
-| local versionado | preferências, posição e rascunho mínimo | limpar no logout; sem conteúdo privado completo |
+| local versionado | IDs, posição, índice não confirmado, filtros não sensíveis e versão | namespace por `authUserId`; limpar antes de trocar conta |
 | servidor | respostas, checkpoints confirmados, progresso, metas e XP | fonte de verdade |
 
 Conflito entre local e servidor usa `serverVersion`/`updatedAt`. Resposta confirmada no servidor vence rascunho; rascunho mais novo pede reconciliação quando não há resposta confirmada.
 
+É proibido persistir localmente token/sessão, email, enunciado, opções, explicação, gabarito, fonte privada, nota/caderno, desempenho ou payload completo. Namespace obrigatório: `cfs:v3:{authUserId}:{schemaVersion}`. Logout local/global e troca de usuário apagam memória, local/session storage e IndexedDB pertencentes ao namespace antes da navegação.
+
 ## Cache
 
-- Conteúdo global publicado pode usar cache servidor com tag por versão do edital/conteúdo, desde que a resposta não carregue sessão ou `Set-Cookie`.
-- Dados privados usam cache por request ou memória do cliente, nunca cache compartilhado.
+- Conteúdo global publicado pode usar cache servidor apenas em função pura parametrizada por versão/locale, sem capturar cookies, sessão ou cliente RLS e sem `Set-Cookie`.
+- Dados privados são `no-store` ou deduplicados apenas no request (`React.cache`); nunca usam `use cache`/ISR compartilhado.
 - Mutações invalidam tags/queries específicas.
 - Rotas de Auth e páginas autenticadas que renovam sessão são dinâmicas.
 - Data API e Storage respeitam RLS/políticas; URL assinada tem TTL curto.
 
 ## Paginação e busca
 
-- cursor estável, não offset, para listas grandes e histórico;
+- cursor opaco estável composto por valor de ordenação + ID; padrão 25 e máximo 100 para listas grandes e histórico;
 - filtros aplicados no servidor;
 - debounce/cancelamento para busca textual;
 - contagem total somente quando barata; caso contrário mostrar “mais resultados”;
 - virtualização apenas após medição.
+- enriquecimento é feito por join/batch no banco; proíbe fetch por item e download de catálogos completos para junção cliente/Node;
+- contagem exata usa query separada quando barata; nunca usa uma página truncada como total;
+- home/desempenho não podem limitar silenciosamente o histórico a 5.000 attempts.
 
 ## Orçamento de experiência
 
@@ -119,6 +125,10 @@ Fases iniciais continuam network-first. Uma fase posterior pode permitir pacote 
 
 Sem esses requisitos, “offline” significa apenas shell e aviso de reconexão, não estudo completo.
 
+No primeiro corte, o service worker usa allowlist exata de shell e assets públicos versionados. Nunca cacheia navegação, `/api/**`, Auth, URL assinada, asset de questão/fonte ou resposta com `private`, `no-store` ou `Set-Cookie`, mesmo que `request.destination` seja `image`.
+
+Testes obrigatórios incluem A → cache/rascunho → logout → B, refresh de sessão/prefetch, inspeção de todos os storages, ausência de gabarito e duas abas com conflito de `serverVersion`. Ver [ADR 004](../adr/004-v3-cache-and-local-state.md).
+
 ## Observabilidade
 
 Eventos próprios e minimizados:
@@ -131,4 +141,3 @@ Eventos próprios e minimizados:
 - Web Vitals por rota/classe de dispositivo.
 
 Não enviar enunciados, alternativas, respostas, tokens, email ou nomes de fontes privadas.
-

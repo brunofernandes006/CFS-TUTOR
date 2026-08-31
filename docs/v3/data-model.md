@@ -7,7 +7,8 @@
 - Dados globais de conteúdo separados dos dados privados por usuário.
 - Estados com constraints ou enums documentados.
 - Histórico auditável por versão/evento, sem apagar fatos pedagógicos.
-- `user_id` referencia `auth.users(id)` diretamente ou `profiles(id)`, conforme decisão de migration.
+- Tabelas V3 privadas usam `user_id → auth.users(id)`; como `profiles.id` é o mesmo UUID, joins de perfil não mudam a autoridade.
+- Tabelas V2 mantêm `user_id → app_users(id)` durante expand/contract e são resolvidas pela ponte Auth; nenhuma FK é reescrita em big bang.
 - RLS habilitado e grants mínimos em toda tabela exposta.
 
 ## Identidade
@@ -26,7 +27,11 @@ Usuário, papel, concedido por, data e revogação. Acesso somente servidor auto
 
 ### `app_users` — legado
 
-Será absorvida por `profiles` ou transformada em compatibilidade temporária. `access_key_hash` é removido somente após cutover validado.
+Durante coexistência é a ponte de domínio V2 e recebe `auth_user_id uuid null unique`. O proprietário mantém o ID legado; cada usuário Auth novo recebe linha de compatibilidade com `id = auth_user_id` e `access_key_hash = null`, enquanto FKs V2 existirem. Deixa de ser fonte de autenticação no cutover. Só é removida no contract quando zero FK depender dela; caso contrário fica read-only até o último contract. `access_key_hash` deixa de ser lido no cutover e é removido após duas releases e 14 dias estáveis.
+
+### `private.legacy_user_auth_map` — temporária e auditável
+
+Relação única `legacy_user_id → auth_user_id`, estado `PENDING/VERIFIED/CUTOVER/RETIRED`, lote, timestamps e contagens/checksums. Sem grants ao cliente. Permanece além do primeiro contract para auditoria e rollback; detalhes no [ADR 001](../adr/001-v3-identity-and-auth-cutover.md).
 
 ## Currículo, fontes e conteúdo global
 
@@ -44,7 +49,11 @@ Será absorvida por `profiles` ou transformada em compatibilidade temporária. `
 
 ### `syllabus_versions` — nova
 
-Representa cada edital/versão e sua vigência. `syllabus_items` passa a apontar para versão explícita; escopo corrente não depende apenas de `active`.
+Representa cada edital/versão e sua vigência. Não clona tópicos nem recebe progresso.
+
+### `syllabus_version_items` — nova
+
+Associação do conceito estável `syllabus_items` a `syllabus_versions`, com título/código exibido, ordem, estado e metadados de escopo daquela versão. Unique `(syllabus_version_id, syllabus_item_id)`. Sessão/simulado fixa `syllabus_version_id`; o escopo corrente não depende de `active`.
 
 ### `study_contents` — nova
 
@@ -85,7 +94,15 @@ Ações administrativas, entidade, versão anterior/nova, ator e motivo. Payload
 
 ### `question_versions` — nova
 
-Snapshot editorial de enunciado, opções, gabarito, explicação, assets e status. Tentativas apontam para a versão apresentada.
+Snapshot apresentável de contexto, enunciado, opções, assets autorizados, status e hash editorial. **Não contém gabarito, alternativa correta nem explicação pós-resposta.** Tentativas apontam para a versão apresentada.
+
+### `private.question_answer_versions` — nova, schema não exposto
+
+Uma linha por `question_version_id`: estado `VALID/ANNULLED/PENDING`, alternativa correta somente em `VALID`, explicação pós-resposta, referência ao gabarito oficial, verificador, hash e auditoria. `anon` e `authenticated` não têm USAGE/SELECT; acesso ocorre apenas na correção RPC interna ou no backend administrativo.
+
+### `api.published_question_versions` — view segura
+
+View `security_invoker`/projeção da Data API com somente campos de `PublicQuestionDTO`. Não faz join com `private.question_answer_versions`. Se o schema `api` não for exposto, o mesmo DTO é produzido exclusivamente pelo Route Handler.
 
 ### `question_reports` — nova
 
@@ -95,7 +112,7 @@ Usuário, questão/versão, categoria, descrição, status, atribuição e resol
 
 ### `study_sessions` — evoluir
 
-Adicionar tipo, item/conteúdo alvo, status, checkpoint, versão, última atividade e idempotency key.
+Adicionar tipo, item/conteúdo alvo, `syllabus_version_id`, status, checkpoint, versão otimista, última atividade e idempotency key.
 
 ### `study_session_items` — nova
 
@@ -103,7 +120,7 @@ Fila materializada de conteúdo, prompts ou questões; posição, estado, respos
 
 ### `question_attempts` — evoluir
 
-Usar `auth.uid`, apontar para versão da questão, sessão e contexto; incluir idempotency key e elegibilidade pedagógica.
+Preservar `user_id → app_users` durante expand e adicionar `auth_user_id` sombra. O proprietário é backfilled; novas tentativas escrevem ambos na mesma transação, sendo Auth a policy owner. Adicionar `question_version_id` inicialmente nulo, sessão/item, contexto, `idempotency_key`, elegibilidade, `review_policy_version`, entradas/resultados da política e outcome. Backfill cria baseline antes de NOT NULL. Unique parcial por Auth/contexto/idempotency key.
 
 ### `topic_progress` — evoluir
 
@@ -115,11 +132,11 @@ Agenda por usuário/item, estágio, política/versionamento, próxima revisão e
 
 ### `error_notebook` — evoluir
 
-Usuário/questão/item, causa, contagem, lacuna, estado, última ocorrência e resolução. Histórico de classificações pode ir para tabela de eventos.
+Usuário/questão/versão/item, causa, contagem, lacuna, estado, última ocorrência e resolução. Tentativa incorreta elegível cria/reabre de modo idempotente; anulada/inválida não cria erro. Alterações de causa geram eventos auditáveis; histórico não é apagado.
 
-### `ui_checkpoints` — nova ou absorvida em sessões
+### Checkpoints — absorvidos, sem tabela genérica
 
-Estado remoto mínimo: rota/entidade, posição, versão e timestamp. Não armazena conteúdo completo.
+`study_sessions`, `study_session_items`, `simulations` e `simulation_questions` são os donos do estado remoto. URL guarda filtros navegáveis; `user_preferences` guarda somente preferências. Não será criada `ui_checkpoints` na V3 inicial.
 
 ## Coleções
 
@@ -173,7 +190,11 @@ Dias elegíveis, janela/tolerância, última data e timezone. Não depende de si
 
 ### `simulations` — evoluir
 
-Usuário Auth, política/versão, seed, checkpoint, tempo, status e idempotency key.
+Owner Auth/legado pela fase, `syllabus_version_id`, política/versão, seed, checkpoint, tempo, status, versão otimista e idempotency key. A versão do edital não muda após criação.
+
+### `simulation_questions` — evoluir
+
+Mantém owner indireto por `simulation_id`; não ganha `user_id`. Adicionar `question_version_id`, resposta/versão de resposta, estado congelado, resultado após conclusão e `attempt_id` único/nulo. Finalização cria no máximo um attempt por item e não recalcula pelo gabarito corrente.
 
 ### `performance_daily` — nova, agregado
 
@@ -186,6 +207,7 @@ Agregados nunca substituem eventos; jobs podem reconstruí-los.
 | Classe | Exemplos | Leitura aluno | Escrita aluno |
 |---|---|---|---|
 | catálogo publicado | disciplinas, edital, conteúdo, questões, provas | autenticado e elegível | nenhuma direta |
+| correção/gabarito | `private.question_answer_versions` | nenhuma | nenhuma |
 | privado individual | progresso, tentativas, revisões, erros, metas, XP | somente proprietário | proprietário por política/RPC |
 | coleção privada | favoritos, cadernos, filtros | somente proprietário | proprietário |
 | administrativo | candidatos, auditoria, papéis | nenhuma | nenhuma |
@@ -197,12 +219,33 @@ Agregados nunca substituem eventos; jobs podem reconstruí-los.
 - `(user_id, updated_at desc)` nas entidades privadas;
 - `(user_id, status, next_review_at)` em revisões;
 - `(user_id, syllabus_item_id, answered_at desc)` em tentativas;
+- `(user_id, answered_at desc, id desc)` para cursor de histórico;
+- `(user_id, status, updated_at desc, id desc)` para caderno/sessões;
 - `(syllabus_version_id, discipline_id, edital_order)` no currículo;
+- `(syllabus_version_id, syllabus_item_id)` unique em associações;
+- `(simulation_id, position)` e `(simulation_id, question_version_id)` em simulados;
 - GIN somente para filtros JSONB realmente consultados;
 - índices parciais para publicado/ativo e sessões em andamento;
 - unique para idempotency keys por usuário/escopo.
 
 ## Integridade transacional
 
-Registrar tentativa deve validar versão/gabarito, inserir attempt, atualizar progresso/revisão/erro e emitir XP/meta de forma atômica ou por outbox idempotente. Nunca aceitar `user_id` informado pelo cliente quando a sessão fornece `auth.uid()`.
+Registrar tentativa valida sessão/propriedade/versão/opção/elegibilidade, reserva idempotência, insere attempt e atualiza progresso, revisão e erro **na mesma transação**. A transação também grava um evento outbox único. XP, metas e agregados são projeções assíncronas/reconstruíveis; falha nelas não desfaz a tentativa. Nunca aceitar `user_id` informado pelo cliente quando a sessão fornece `auth.uid()`.
 
+`ReviewPolicyV3` é a fonte canônica e versionada para 24h/7d/30d/60d. O RPC V2 divergente não é reutilizado como política. Simulados criam attempts apenas na finalização idempotente, exatamente uma vez por item. Ver [ADR 006](../adr/006-v3-attempt-review-simulation-consistency.md).
+
+## Backfill sem quebra da V2
+
+1. criar edição V2 em `syllabus_versions` e associações para itens existentes;
+2. criar uma versão-baseline e uma resposta privada para cada questão;
+3. adicionar FKs V3 nulas, preencher em lotes reexecutáveis e dual-write somente para novas linhas;
+4. reconciliar contagens/hashes, versões órfãs e resultados de simulados;
+5. aplicar NOT NULL/constraints apenas depois de zero divergência;
+6. nunca recalcular attempt/simulado histórico a partir da versão atual.
+
+## Contratos de consulta
+
+- Históricos e caderno usam cursor opaco baseado em ordenação estável, limite padrão 25 e máximo 100.
+- A primeira página inclui `nextCursor`; total exato só é calculado quando houver query dedicada barata.
+- Enriquecimento de erro/revisão/questão é feito por join/projeção no banco, não carregando catálogos completos para juntar em memória.
+- Home/desempenho usam agregações/queries limitadas desde a primeira fase; nunca truncam silenciosamente attempts em 5.000.
